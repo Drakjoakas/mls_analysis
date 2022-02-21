@@ -45,7 +45,6 @@ import pandas as pd
 #   -guaranteed_compensation
 #   
 
-
 PLAYER_DATASET = "./all_players.csv"
 SALARIES_DATASET = "./mls-salaries-"    #iterate to get the year
 
@@ -95,6 +94,18 @@ MLS_TEAMS_DICT = {
     # "JAM"
 }
 
+POS_DICT = {
+    "F": "Forward",    #Striker, Center Forward, Wingers
+    "M": "Midfielder", #Left Mid, Right Mid, Center Mid, Attacking Mid, Defensive Mid
+    "M-F": "Midfielder-Forward",
+    "D": "Defender",  #Center back, Full Back (Left Back, Right Back), Wing Backs, Sweeper (RARE)
+    "M-D": "Midfielder-Defender",
+    "D-M": "Defender-Midfielder",
+    "F-M": "Forward-Midfielder"
+}
+
+
+
 def getYearSalary(year: int) -> pd.DataFrame:
     if year < 2007 or year > 2017:
         return None
@@ -113,23 +124,56 @@ def preprocess_salaries(dataset: pd.DataFrame) -> pd.DataFrame:
     dataset['name'] = dataset['first_name'] + ' ' + dataset['last_name']
     return dataset
 
+def get_teams_from_salaries() -> list:
+    teams = []
+    for year in range (2007,2018):
+        data = getYearSalary(year)
+        data.dropna(inplace=True)
+        for team in data['club'].unique():
+            if str(team) not in teams:
+                teams.append(str(team))
+    return teams 
+
+def normalize_team(team: str) -> str:
+    switcher = {
+        "MIN" : "MNUFC",
+        "NYC" : "NYCFC",
+        "NY" : "NYCFC",
+        "NYR" : "NYRB",
+        "RBNY": "NYRB"
+    }
+    
+    return switcher.get(team,team)
+
 def preprocess_players(dataset: pd.DataFrame) -> pd.DataFrame:
     #Quitar equipos que no aparezcan en los salarios
-    #Estandarizar nombres (quitar espacios y cosas así)
+    teams = get_teams_from_salaries()
+    for x in dataset.index:
+        dataset.loc[x,"Club"] = normalize_team(str(dataset.loc[x,"Club"]).strip())  #Remove spaces and normalize teams with different abreviation
+        if dataset.loc[x,"Club"] not in teams:
+            dataset.drop(x,inplace=True)
+            
     #Quitar columnas que no usaremos
+    #Which columns are more important?
+    #Player, Club, Position,
+    #For each position, different stats.
+    # Forward, Mid-Forward, Forward-Mid -> Goals, Assist, SOG%
+    # Midfielder, Mid-Forward, Mid-Defender -> Assist, GWA, A/90min, Goals(?)
+    # Defender, Mid-Defender, Defender-Mid -> Assists, Fouls Commited (negative relation?), A/90min, Goals(?)
     return dataset
 
 if __name__ == "__main__":
     # salarie_data = getYearSalary(2017)
     # salarie_data = preprocess_salaries(salarie_data)
     # salarie_data.dropna(inplace=True)
-    diff_teams = set()
+    
+    # diff_teams = set()
 
     players = load_data(PLAYER_DATASET)
     players = limit_to_year_range(players,2007,2017)
     players.dropna(inplace=True)
-    for i in players["Club"]:
-        i = str(i).strip()
-    print(players['Club'].unique())
+    print(players["POS"].unique())
+
+    
     
 
