@@ -1,6 +1,7 @@
 from json import load
 from tokenize import String
 from typing import Set
+from xml.etree.ElementInclude import include
 import pandas as pd
 
 #  =====Datasets====
@@ -47,6 +48,7 @@ import pandas as pd
 
 PLAYER_DATASET = "./all_players.csv"
 SALARIES_DATASET = "./mls-salaries-"    #iterate to get the year
+COLUMNS_PLAYERS = ["Player", "Club","POS","Year"]
 
 MLS_TEAMS_DICT = {
     "ATL" : "Atlanta United Football Club",
@@ -153,14 +155,40 @@ def preprocess_players(dataset: pd.DataFrame) -> pd.DataFrame:
         if dataset.loc[x,"Club"] not in teams:
             dataset.drop(x,inplace=True)
             
-    #Quitar columnas que no usaremos
-    #Which columns are more important?
-    #Player, Club, Position,
-    #For each position, different stats.
-    # Forward, Mid-Forward, Forward-Mid -> Goals, Assist, SOG%
-    # Midfielder, Mid-Forward, Mid-Defender -> Assist, GWA, A/90min, Goals(?)
-    # Defender, Mid-Defender, Defender-Mid -> Assists, Fouls Commited (negative relation?), A/90min, Goals(?)
     return dataset
+#Quitar columnas que no usaremos
+#Which columns are more important?
+#Player, Club, Position,
+#For each position, different stats.
+# Forward, Mid-Forward, Forward-Mid -> Goals, Assist, SOG%
+# Midfielder, Mid-Forward, Mid-Defender -> Assist, GWA, A/90min, Goals(?)
+# Defender, Mid-Defender, Defender-Mid -> Assists, Fouls Commited (negative relation?), A/90min, Goals(?)
+
+def limit_by_position(data: pd.DataFrame, position: str) -> pd.DataFrame:
+        position_dict = {
+            "F" : ["F","M-F","F-M"],
+            "M" : ["M","M-F","M-D"],
+            "D" : ["D","M-D","D-M"]
+        }
+        
+        stats_dict = {
+            "F": ["G","A","SOG%","GWG"],
+            "M": ["A","GWA","A/90min","G"],
+            "D": ["A","FC","A/90min","G"]
+        }
+        
+        if position not in position_dict.keys():
+            print("Position not in list")
+            return data
+        
+        cols = [x for x in list(data.columns) if x not in stats_dict.get(position) + COLUMNS_PLAYERS]
+        
+        data.drop(cols,axis=1,inplace=True)
+        for x in data.index:
+            if data.loc[x,"POS"] not in position_dict.get(position):
+                data.drop(x,inplace=True)
+        
+        return data
 
 if __name__ == "__main__":
     # salarie_data = getYearSalary(2017)
@@ -170,9 +198,11 @@ if __name__ == "__main__":
     # diff_teams = set()
 
     players = load_data(PLAYER_DATASET)
-    players = limit_to_year_range(players,2007,2017)
     players.dropna(inplace=True)
-    print(players["POS"].unique())
+    players = limit_to_year_range(players,2007,2017)
+    players = preprocess_players(players)
+    players = limit_by_position(players,"F")
+    print(players.head())
 
     
     
