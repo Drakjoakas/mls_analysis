@@ -138,18 +138,31 @@ STATS_MEANING_DICT = {
     "FC": "Fouls Commited"
 }
 
-# Loads the .csv mls salaries file corresponding to the year provided
+
 
 
 def get_year_salary(year: int) -> pd.DataFrame:
+    """ Loads the .csv mls salaries file corresponding to the year provided."""
+    
     if year < 2007 or year > 2017:
         return None
     return pd.read_csv(str(SALARIES_DATASET+str(year)+".csv"))
 
-# Loads the csv file from the path provided
+def get_full_salaries() -> pd.DataFrame:
+    """Returns DataFrame with the data of MLS salaries of all the years.
 
+    Returns:
+        pd.DataFrame: DataFrame with salary per player, per year.
+    """
+    res = pd.DataFrame()
+    for year in range(2007,2018):
+        data = get_year_salary(year)
+        data["Year"] = year
+        res = pd.concat([res,data],ignore_index=True)
+    return res
 
 def load_data(csv_file_path: str) -> pd.DataFrame:
+    """ Loads the csv file from the path provided."""
     data = pd.read_csv(csv_file_path)
     return data
 
@@ -321,40 +334,6 @@ def visualization(dataset: pd.DataFrame, param: str, year: int, position: str):
         f'{FIGURES_DIRECTORY}/{year}/{POS_DICT.get(position)}/{temp}_{position}.png')
     plt.close()
 
-# options:
-#  0 => Champions and winners of Supporters' Shield
-#  1 => Champions Only
-#  2 => Supporters' Shield's Winners
-def get_champions_data(year: int = None,option: int = 0) -> pd.DataFrame:
-    data = load_data(TEAM_DATASET)
-    data = limit_to_year_range(data, 2007, 2017)
-
-    # abv_dict = {
-    #     "(X)":  "Supporters Shield",
-    #     "(SS)": "Supporters Shield",
-    #     "(C)":  "Champion",
-    #     "(W1)": "Western Confederation Champion",
-    #     "(V)":  "Canadian Champion Winner",
-    #     "(U)":  "US Open Cup Winner",
-    #     "(E1)": "Eastern Confederation Champion",
-    #     "(C1)": "Central Confederation Champion"
-    # }
-
-    relevant_pattern = r'\([CUEXSCWV]{1,2}1?(\, )?([SSXEWC]1?)?\)'
-    champion_pattern = r'\(([CWEUV]1?(\, [XS]{1,2})?|[XS]{1,2}\, [CWE]1?)\)'
-    shield_pattern = r'\(([XS]{1,2}(\, [A-Z]1?)?|[CEW]1?\, [XS]{1,2})\)'
-    options = [relevant_pattern,champion_pattern,shield_pattern]
-
-    data = data[data["Conference"] == "Overall"]
-    if year is not None:
-        data = data[data["Year"] == year]
-    # data = data[re.search(champion_pattern,str(data["Team"])) is not None]
-    for x in data.index:
-        if re.search(options[option], str(data.loc[x, "Team"])) is None:
-            data.drop(x, inplace=True)
-
-    return data
-
 
 def get_team_abv(team: str) -> str:
 
@@ -415,8 +394,6 @@ def preprocess_table(data: pd.DataFrame, year: int = None, club: str = None) -> 
         dataset.loc[x,"Champion"] = re.search(champion_pattern, str(dataset.loc[x, "Team"])) is not None
         dataset.loc[x,"Shield"]   = re.search(shield_pattern  , str(dataset.loc[x, "Team"])) is not None
     
-    # dataset["Champion"] = re.search(champion_pattern, str(dataset.Team)) is not None
-    # dataset["Shield"]   = re.search(shield_pattern, str(dataset.Team)) is not None
     dataset = normalize_team_names(dataset)
     
     dataset.drop(columns=["SW","SL","D","Qualification","Conference","Head-to-head","PPG"],inplace=True)
@@ -447,3 +424,10 @@ if __name__ == "__main__":
     table = load_data(TEAM_DATASET)
     table = preprocess_table(table)
     print(table.head())
+    
+    salary = get_full_salaries()
+    print(salary.head())
+    salary = preprocess_salaries(salary)
+    data = salary[["Club","base_salary","Year"]].groupby(["Club","Year"]).sum()
+    
+    
