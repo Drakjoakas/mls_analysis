@@ -1,9 +1,11 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.markers as mark
 import numpy as np
 import os
 import re
 import math
+import random
 
 #  =====Datasets====
 #   "all_players.csv": all outfield player data from every season of MLS through 2020 (1996-2020)
@@ -54,6 +56,11 @@ COLUMNS_PLAYERS = ["Player", "Club", "POS", "Year", "GP", "MINS"]
 
 MIN_MINS_PLAYED = 500
 MIN_GAMES_PLAYED = 5
+
+AMS_DIM = 3
+K = 6
+K_MEAN_STEPS = 30
+ANALYSIS_BAR = 32
 
 FIGURES_DIRECTORY = './figures'
 
@@ -142,7 +149,17 @@ STATS_MEANING_DICT = {
     "FC": "Fouls Commited"
 }
 
+class Centroid:
+    def __init__(self, dim_list):
+        self.place = dim_list
 
+AVG = 'avg'
+MED = 'median'
+RAT = 'balance-score'
+NORM_RAT = 'normalized_ratio'
+DIST = 'distance'
+VAR = 'variance'
+GINI = 'Gini'
 
 
 def get_year_salary(year: int) -> pd.DataFrame:
@@ -446,7 +463,8 @@ def plot_salary_param_distribution(salary_dataset: pd.DataFrame, param_list: lis
     x_axis = sorted_data["Wage"].copy()
     
     for param in param_list:
-        y_axis = sorted_data[param] / sorted_data["MINS"]
+        # y_axis = sorted_data[param] / (sorted_data["MINS"] / 90)
+        y_axis = sorted_data[param] / sorted_data["GP"]
         sal_group, param_group = divide_to_salary_groups(x_axis,y_axis)
         
         plt.plot(sal_group, param_group, label=param)
@@ -457,7 +475,7 @@ def plot_salary_param_distribution(salary_dataset: pd.DataFrame, param_list: lis
     plt.suptitle("MLS performance to salary from 2007-2017")
     plt.title("Normalize to highest personal stat")
     plt.xlabel("Base Salary + Guaranteed Compensation")
-    plt.ylabel("Performance per minute over one seson")
+    plt.ylabel("Performance per Games Played over one seson")
     plt.legend(loc="upper left", ncol=3)
     plt.show()
     
@@ -475,6 +493,7 @@ def plot_salary_param_distribution(salary_dataset: pd.DataFrame, param_list: lis
     plt.ylabel("Pearson Correlation")
     plt.legend()
     plt.show()
+    return correlation_dict_pd
     
 def get_salary_groups(salaries: pd.Series, rate: int = 1.3) -> list:
     base = salaries.loc[0]
@@ -588,7 +607,312 @@ def wins_by_parameter(table_data: pd.DataFrame, param_list: list,win_param: str 
         plt.scatter(x_axis[index],y_axis[index],label=labels[index])
     plt.legend()
     plt.show()
+    return team_performances_dict
 
+####################################################################################################
+
+def search_k_means_communities(teams,team_performance,salary_metrics, parameter, limit=ANALYSIS_BAR, x=AVG, y=MED, w=RAT):
+    output = create_salary_communities(teams,team_performance,salary_metrics, parameter, x, y, w)
+    while max(output[2]) <= limit:
+        print(f"max: {max(output[2])}, min: {min(output[2])}")
+        output = create_salary_communities(teams,team_performance,salary_metrics, "W")
+    print(f"max: {max(output[2])}, min: {min(output[2])}")
+    return output
+
+def create_salary_communities(team_list,team_performances,salary_metrics, parameter, x=AVG, y=MED, w=RAT):
+    # team_list = resources[4]
+    # team_performances = resources[7]
+    # salary_metrics = resources[8]
+    x_axis = list()
+    y_axis = list()
+    z_axis = list()
+    w_axis = list()
+    for team in team_list:
+        for year in range(2007, 2018):
+            try:
+                w_axis.append(salary_metrics[(team, year)][2][w])
+                x_axis.append(salary_metrics[(team, year)][2][x])
+                y_axis.append(salary_metrics[(team, year)][2][y])
+                z_axis.append(team_performances[year][team][parameter])
+            except KeyError:
+                # print(f"No info for ({team},{year})")
+                1+1
+    # PLOT 3D AMS DISTRIBUTION
+    ax = plt.axes(projection='3d')
+    ax.scatter3D(x_axis, y_axis, z_axis)
+    ax.set_xlabel(x)
+    ax.set_ylabel(y)
+    ax.set_zlabel(parameter)
+    plt.title(f"MLS team's AMS({parameter}) distribution in 2007-2017")
+    plt.show()
+    # PLOT 2D BALANCE-WINS DISTRIBUTION
+    plt.scatter(z_axis, w_axis)
+    plt.title(f"MLS team's {parameter} to {w} : 2007-2017")
+    plt.ylabel(f"{w}")
+    plt.xlabel(parameter)
+    plt.show()
+    # PLOT 3D AMS COMMUNITIES
+    norm = normalize_for_k_means(x_axis, y_axis, z_axis)
+    communities = k_means((x_axis, y_axis, z_axis), norm, K, AMS_DIM, K_MEAN_STEPS)
+    x_axis, y_axis, z_axis, size_axis, balance_axis = centroids_to_points(communities)
+    ax = plt.axes(projection='3d')
+    ax.scatter3D(x_axis, y_axis, z_axis, s=size_axis, color="orange", edgecolor="black")
+    ax.set_xlabel(x)
+    ax.set_ylabel(y)
+    ax.set_zlabel(parameter)
+    plt.suptitle(f"MLS AMS({parameter}) communities : 2007-2017")
+    plt.title(f"K: {K}, steps:{K_MEAN_STEPS}")
+    plt.show()
+    # PLOT 2D BALANCE-WINS DISTRIBUTION
+    for index in range(len(x_axis)):
+        if balance_axis[index] != -1 and z_axis != 0:
+            label = f"BS: {arrange_decimal_point(balance_axis[index])}, W: {arrange_decimal_point(z_axis[index])}"
+            plt.scatter(z_axis[index], balance_axis[index], s=size_axis[index], label=label)
+    plt.title(f"MLS AMS communities {parameter} to {w} : 2007-2017")
+    plt.xlabel(parameter)
+    plt.ylabel(f"{w}")
+    plt.legend()
+    plt.show()
+    return x_axis, y_axis, z_axis, size_axis, balance_axis
+
+def centroids_to_points(communities):
+    x_axis = list()
+    y_axis = list()
+    z_axis = list()
+    size_axis = list()
+    balance_axis = list()
+    centroids = list(communities.keys())
+    for index in range(len(centroids)):
+        x_axis.append(centroids[index].place[0])
+        y_axis.append(centroids[index].place[1])
+        z_axis.append(centroids[index].place[2])
+        size_axis.append(10*len(communities[centroids[index]]))
+        if y_axis[-1] != 0:
+            balance_axis.append(x_axis[-1] / y_axis[-1])
+        else:
+            balance_axis.append(-1)
+    return x_axis, y_axis, z_axis, size_axis, balance_axis
+
+def normalize_for_k_means(x_axis, y_axis, z_axis):
+    x_norm = max(x_axis) - min(x_axis)
+    y_norm = max(y_axis) - min(y_axis)
+    z_norm = max(z_axis) - min(z_axis)
+
+    norm_x = max(x_axis)
+    x_axis = [x / norm_x for x in x_axis]
+    norm_y = max(y_axis)
+    y_axis = [y / norm_y for y in y_axis]
+    norm_z = max(z_axis)
+    z_axis = [z / norm_z for z in z_axis]
+    return x_norm, y_norm, z_norm
+
+def k_means(data_points, norm, k, dim, stop=5):
+    limits = calc_limits(data_points, dim)
+    centroids = create_centroids(limits, k)
+    points = get_points(data_points, dim)
+    start_communities = calc_communities(points, centroids, norm)
+    final_communities = k_means_help(points, centroids, start_communities, dim,
+                                     stop, norm)
+    return final_communities
+
+
+def k_means_help(points, centroids, communities, dim, stop, norm):
+    cycles = 0
+    centroids = adjust_centroids(centroids, communities, dim)
+    new_communities = calc_communities(points, centroids, norm)
+    while cycles < stop:
+        if same_communities(communities, new_communities):
+            return communities
+        else:
+            communities = new_communities
+            centroids = adjust_centroids(centroids, communities, dim)
+            cycles += 1
+    return communities
+
+
+def same_communities(community1, community2):
+    for community in community1.values():
+        if community not in community2.values():
+            return False
+    return True
+
+
+def adjust_centroids(centroids, communities, dim):
+    new_centroids = list()
+    for centroid in centroids:
+        centroid = adjust_centroid(communities[centroid], dim)
+        new_centroids.append(centroid)
+    return new_centroids
+
+
+def adjust_centroid(points, dim):
+    new_dim = dict()
+    for d in range(dim):
+        new_dim[d] = list()
+    for point in points:
+        for d in range(dim):
+            new_dim[d].append(point[d])
+    new_centroid = Centroid(new_dim)
+    for d in range(dim):
+        if len(points) > 0:
+            new_centroid.place[d] = sum(new_centroid.place[d]) / len(points)
+        else:
+            new_centroid.place[d] = 0
+    return new_centroid
+
+
+def calc_communities(points, centroids, norm):
+    communities = dict()
+    for centroid in centroids:
+        communities[centroid] = list()
+    for point in points:
+        closet_centroid = find_closest(point, centroids, norm)
+        communities[closet_centroid].append(point)
+    return communities
+
+
+def find_closest(point, centroids, norm):
+    closest_centroid = centroids[0]
+    closest_dist = calc_dist(point, centroids[0].place, norm)
+    for centroid in centroids:
+        dist = calc_dist(point, centroid.place, norm)
+        if dist < closest_dist:
+            closest_dist = dist
+            closest_centroid = centroid
+    return closest_centroid
+
+
+def calc_dist(point, centroid, norm):
+    dist = 0
+    for index in range(len(point)):
+        dist += ((point[index] - centroid[index]) / norm[index]) ** 2
+    dist = dist ** 0.5
+    return dist
+
+
+def get_points(data_points, dim):
+    points = list()
+    for index in range(len(data_points[0])):
+        point = list()
+        for d in range(dim):
+            point.append(data_points[d][index])
+        points.append(point)
+    return points
+
+
+def calc_limits(data_points, dim):
+    limits = list()
+    for d in range(dim):
+        high = max(data_points[d])
+        low = min(data_points[d])
+        limits.append([low, high])
+    return limits
+
+
+def create_centroids(limits, k):
+    centroids = list()
+    for i in range(k):
+        c = list()
+        for d in range(len(limits)):
+            c.append(random.uniform(limits[d][0], limits[d][1]))
+        centroid = Centroid(c)
+        centroids.append(centroid)
+    return centroids
+
+def calculate_team_salary_metrics(players_dictionary: pd.DataFrame, team_list):
+    salary_metrics = dict()
+    # for player in players_dictionary.values():
+    for x in players_dictionary.index:
+        team = players_dictionary.loc[x,"Club"]
+        if team not in salary_metrics:
+            salary_metrics[team] = [[], 0, dict()]
+        salary_metrics[team][0].append(players_dictionary.loc[x,"Wage"])
+        salary_metrics[team][1] += 1
+    for team in team_list:
+        element = salary_metrics[team]
+        element[0] = sorted(element[0], key=lambda x: x)
+        avg = int(calc_avg(element[0]))
+        median = int(calc_median(element[0]))
+        element[2][AVG] = avg
+        element[2][MED] = median
+        element[2][RAT] = avg / median
+        element[2][NORM_RAT] = math.log(avg / median, 1.7)
+        element[2][DIST] = max(element[0]) - min(element[0])
+        element[2][VAR] = var(pd.DataFrame(element[0]))
+        element[2][GINI] = gini(element[0])
+    return salary_metrics
+
+def calculate_team_salary_metrics_yearly(players_dictionary: pd.DataFrame, team_list):
+    salary_metrics = dict()
+    # for player in players_dictionary.values():
+    for x in players_dictionary.index:
+        team = players_dictionary.loc[x,"Club"]
+        year = players_dictionary.loc[x,"Year"]
+        if (team, year) not in salary_metrics:
+            salary_metrics[(team, year)] = [[], 0, dict()]
+        salary_metrics[(team, year)][0].append(players_dictionary.loc[x,"Wage"])
+        salary_metrics[(team, year)][1] += 1
+    for team in team_list:
+        for year in range(2007, 2018):
+            try:
+                element = salary_metrics[(team, year)]
+                element[0] = sorted(element[0], key=lambda x: x)
+                avg = int(calc_avg(element[0]))
+                median = int(calc_median(element[0]))
+                element[2][AVG] = avg
+                element[2][MED] = median
+                element[2][RAT] = avg / median
+                element[2][NORM_RAT] = math.log(avg / median, 1.7)
+                element[2][DIST] = max(element[0]) - min(element[0])
+                element[2][VAR] = var(pd.DataFrame(element[0]))
+                element[2][GINI] = gini(element[0])
+            except KeyError:
+                # print(f"No infor for ({team},{year})")
+                1+1
+    return salary_metrics
+
+def arrange_decimal_point(num, d=3):
+    factor = 10 ** d
+    return int(num * factor) / factor
+
+def calc_avg(lst):
+    return sum(lst) / len(lst)
+
+def calc_median(lst):
+    return lst[int(len(lst) / 2)]
+
+def gini(data_list):
+    n = len(data_list)
+    s = sum(data_list)
+    total_dist = 0
+    for i in data_list:
+        for j in data_list:
+            total_dist += abs(i - j)
+    g = total_dist / (2*n*s)
+    return g
+
+def create_team_performance_dict(players_data, team_dataset: pd.DataFrame, team_list, parameter_list=DEFAULT_STATS):
+    teams_performances = dict()
+    for year in range(2007, 2018):
+        year_performance = dict()
+        for team in team_list:
+            team_data = dict()
+            # team_data["W"] = count_wins(team_dataset, team, year)
+            team_data["W"] = team_dataset[(team_dataset.Club == team) & (team_dataset.Year == year)]["W"].sum()
+            for parameter in parameter_list:
+                team_data[parameter] = sum_team_parameter_per_year(players_data, parameter, year, team)
+            year_performance[team] = team_data
+        teams_performances[year] = year_performance
+    return teams_performances
+
+def sum_team_parameter_per_year(players_dictionary: pd.DataFrame, parameter, year, team):
+    # for key in players_dictionary.keys():
+    #     if key[YEAR_INDEX] == year and key[TEAM_INDEX] == team:
+    #         if type(players_dictionary[key][parameter]) != str:
+    #             parameter_sum += players_dictionary[key][parameter]
+    param_sum = players_dictionary[(players_dictionary.Year == year) & (players_dictionary.Club == team)][parameter].sum()
+    
+    return param_sum
 
 def into_groups(x_axis, y_axis, group_factor, group_index=0):
     x_group_axis = list()
@@ -659,9 +983,9 @@ if __name__ == "__main__":
     table = get_table_data()
     salary = get_full_salaries()
     players = get_players_data()
-    dataset = pd.merge(salary,players,on=["Player","Year","Club"])
+    dataset = pd.merge(salary,players,on=["Player","Year","Club"]) #Players and Salary dataset
     # plot_salary_distribution(dataset,"Wage")
-    # plot_salary_param_distribution(dataset,["G","A","SOG","GWG","GWA"])
+    # tm_pf_dict = plot_salary_param_distribution(dataset,["G","A","SOG","GWG","GWA"])
     # dataset["Wage"].plot.hist(by=["Year"])
     # plt.show()
     
@@ -669,25 +993,33 @@ if __name__ == "__main__":
     team_performances = players[["Club","Year","G","A","SOG","GWG","GWA","G/90min","A/90min"]].groupby(["Club","Year"]).sum()
     team_performances = pd.merge(team_performances,table,on=["Club","Year"])
     
-    # wins_by_parameter(team_performances,param_list)
+    # tm_pf_dict1 = wins_by_parameter(team_performances,param_list)
     data = salary[["Club","base_salary","Year"]].groupby(["Club","Year"]).sum()
     data2 = pd.merge(data,table,on=["Club","Year"])
+    team_list = dataset["Club"].unique().tolist()
+    
+    team_performance_dict = create_team_performance_dict(players,table,team_list)
+    salary_metrics_dict = calculate_team_salary_metrics_yearly(dataset,team_list)
+    
+    search_k_means_communities(team_list,team_performance_dict,salary_metrics_dict,"W")
     
     # print(team_performances.head())
     # print(team_performances.columns)
     # champions = team_performances[team_performances["Champion"] == True]
     # print(champions["Club"].value_counts())
     
-    wins_by_parameter(team_performances,param_list,"Num_Championships")
+    # tm_pf_dict2 = wins_by_parameter(team_performances,param_list,"Num_Championships")
+    # pearson_distance(tm_pf_dict,tm_pf_dict2)
     
-    print(team_performances.columns)
-    data3 = team_performances.groupby(["Club","Champion"]).size().unstack(fill_value=0).reset_index()
-    # data3.fillna(0,inplace=True)
-    data3['number_torunaments'] = data3[False] + data3[True]
-    data3.rename(columns={True:'Num_Championships',False:'No_championship'},inplace=True)
     
-    # data3['proportion_championships'] = data3[True] / data3[False]
-    # data3.sort_values('proportion_championships',ascending=False,inplace=True)
-    print(data3.head())
+    # print(team_performances.columns)
+    # data3 = team_performances.groupby(["Club","Champion"]).size().unstack(fill_value=0).reset_index()
+    # # data3.fillna(0,inplace=True)
+    # data3['number_torunaments'] = data3[False] + data3[True]
+    # data3.rename(columns={True:'Num_Championships',False:'No_championship'},inplace=True)
+    
+    # # data3['proportion_championships'] = data3[True] / data3[False]
+    # # data3.sort_values('proportion_championships',ascending=False,inplace=True)
+    # print(data3.head())
     
     
