@@ -6,6 +6,7 @@ import os
 import re
 import math
 import random
+from scipy import stats as st
 
 #  =====Datasets====
 #   "all_players.csv": all outfield player data from every season of MLS through 2020 (1996-2020)
@@ -58,9 +59,9 @@ MIN_MINS_PLAYED = 500
 MIN_GAMES_PLAYED = 5
 
 AMS_DIM = 3
-K = 6
+K = 7
 K_MEAN_STEPS = 30
-ANALYSIS_BAR = 32
+ANALYSIS_BAR = 15
 
 FIGURES_DIRECTORY = './figures'
 
@@ -77,34 +78,34 @@ STATS_DICT = {
     "D": ["A", "FC", "A/90min", "G"]
 }
 
-DEFAULT_STATS = ["G", "A", "SOG", "FC", "G/90min", "A/90min","GWG","GWA"]
+DEFAULT_STATS = ["G", "A", "SOG", "FC", "G/90min", "A/90min", "GWG", "GWA"]
 
 MLS_TEAMS_DICT = {
-    "ATL": "Atlanta United Football Club",
-    "CHI": "Chicago Fire",
-    "CLB": "Columbus Crew SC",
-    "COL": "Colorado Rapids",
-    "DAL": "FC Dallas",
-    "DC": "D.C. United",
-    "HOU": "Houston Dynamo",
-    "KC": "Sporting Kansas City",
-    "TOR": "Toronto FC",
-    "RSL": "Real Salt Lake",
-    "NYRB": "New York Red Bulls",
-    "MNUFC": "Minnesota United FC",
-    "SEA": "Seattle Sounders FC",
-    "PHI": "Philadelphia Union",
-    "NE": "New England Revolution",
-    "POR": "Portland Timbers",
-    "VAN": "Vancouver Whitecaps",
-    "NYCFC": "New York City FC",
-    "LA": "LA Galaxy",
-    "NY": "New York City FC",
-    "TFC": "Toronto FC",
-    "MTL": "CF Montreal",
-    "LAFC": "Los Angeles Football Club",
-    "ORL": "Orlando City Soccer Club",
-    "CHV": "Chivas USA",
+    "ATL"   : "Atlanta United Football Club",
+    "CHI"   : "Chicago Fire",
+    "CLB"   : "Columbus Crew SC",
+    "COL"   : "Colorado Rapids",
+    "DAL"   : "FC Dallas",
+    "DC"    : "D.C. United",
+    "HOU"   : "Houston Dynamo",
+    "KC"    : "Sporting Kansas City",
+    "TOR"   : "Toronto FC",
+    "RSL"   : "Real Salt Lake",
+    "NYRB"  : "New York Red Bulls",
+    "MNUFC" : "Minnesota United FC",
+    "SEA"   : "Seattle Sounders FC",
+    "PHI"   : "Philadelphia Union",
+    "NE"    : "New England Revolution",
+    "POR"   : "Portland Timbers",
+    "VAN"   : "Vancouver Whitecaps",
+    "NYCFC" : "New York City FC",
+    "LA"    : "LA Galaxy",
+    "NY"    : "New York City FC",
+    "TFC"   : "Toronto FC",
+    "MTL"   : "CF Montreal",
+    "LAFC"  : "Los Angeles Football Club",
+    "ORL"   : "Orlando City Soccer Club",
+    "CHV"   : "Chivas USA",
     # "SJ",
     # "MIA",
     # "NSH",
@@ -149,6 +150,129 @@ STATS_MEANING_DICT = {
     "FC": "Fouls Commited"
 }
 
+CHAMPION_DICT = {
+    "2007": {"SS, E1)": "DC", "W1)": "CHV"},
+    "2008": {"SS, E1)": "CLB", "W1)": "HOU"},
+    "2009": {"SS, E1)": "CLB", "W1)": "LA"},
+    "2010": {"SS, W1)": "LA", "E1)": "NYRB"},
+    "2011": {"SS, W1)": "LA", "E1)": "KC"},
+    "2012": {"E1)": "KC", "SS, W1)": "SJ"},
+    "2013": {"SS, E1)": "NYRB", "W1)": "POR"},
+    "2014": {"SS, W1)": "SEA", "E1)": "DC"},
+    "2015": {"C)": "POR"},
+    "2016": {"C)": "SEA"},
+    "2017": {"C, X)": "TFC"}
+}
+
+REG_SEASON_WEST = {
+    2007: "CHV",
+    2008: "HOU",
+    2009: "LA",
+    2010: "LA",
+    2011: "LA",
+    2012: "SJ",
+    2013: "POR",
+    2014: "SEA",
+    2015: "POR",
+    2016: "SEA",
+    2017: "TFC"
+    }
+REG_SEASON_EAST = {
+    2007: "DC",
+    2008: "CLB",
+    2009: "CLB",
+    2010: "NYRB",
+    2011: "KC",
+    2012: "KC",
+    2013: "NYRB",
+    2014: "DC",
+    2015: "POR",
+    2016: "SEA",
+    2017: "TFC"
+    }
+
+EVALUATION_WINS_2018 = {
+  "NYRB": 22,
+  "ATL": 21,
+  "KC": 18,
+  "SEA": 18,
+  "LAF": 16,
+  "DAL": 16,
+  "NYCFC": 16,
+  "POR": 15,
+  "DC": 14,
+  "CLB": 14,
+  "PHI": 15,
+  "RSL": 14,
+  "LA": 13,
+  "VAN": 13,
+  "MTL": 14,
+  "NE": 10,
+  "HOU": 10,
+  "MNUFC": 11,
+  "TFC": 10,
+  "CHI": 8,
+  "COL": 8,
+  "ORL": 8,
+  "SJ": 4
+}
+
+EVALUATION_WINS_2019 = {
+  "LAF": 21,
+  "NYCFC": 18,
+  "ATL": 18,
+  "SEA": 16,
+  "PHI": 16,
+  "RSL": 16,
+  "MNUFC": 15,
+  "LA": 16,
+  "TFC": 13,
+  "DC": 13,
+  "POR": 14,
+  "NYRB": 14,
+  "DAL": 13,
+  "NE": 11,
+  "SJ": 13,
+  "COL": 12,
+  "CHI": 10,
+  "MTL": 12,
+  "HOU": 12,
+  "CLB": 10,
+  "KC": 10,
+  "ORL": 9,
+  "VAN": 8,
+  "FC": 6
+}
+
+EVALUATION_WINS_2020 = {
+  "PHI": 14,
+  "TFC": 13,
+  "KC": 12,
+  "CLB": 12,
+  "ORL": 11,
+  "SEA": 11,
+  "NYCFC": 12,
+  "POR": 11,
+  "MNUFC": 9,
+  "COL": 8,
+  "DAL": 9,
+  "LAF": 9,
+  "NYRB": 9,
+  "NS": 8,
+  "NE": 8,
+  "SJ": 8,
+  "VAN": 9,
+  "MTL": 8,
+  "IMC": 7,
+  "LA": 6,
+  "RSL": 5,
+  "CFF": 5,
+  "ATL": 6,
+  "DC": 5,
+  "HOU": 4,
+  "FC": 4
+}
+
 class Centroid:
     def __init__(self, dim_list):
         self.place = dim_list
@@ -164,7 +288,7 @@ GINI = 'Gini'
 
 def get_year_salary(year: int) -> pd.DataFrame:
     """ Loads the .csv mls salaries file corresponding to the year provided."""
-    
+
     if year < 2007 or year > 2017:
         return None
     return pd.read_csv(str(SALARIES_DATASET+str(year)+".csv"))
@@ -176,12 +300,12 @@ def get_full_salaries() -> pd.DataFrame:
         pd.DataFrame: DataFrame with salary per player, per year.
     """
     res = pd.DataFrame()
-    for year in range(2007,2018):
+    for year in range(2007, 2018):
         data = get_year_salary(year)
         data["Year"] = year
-        res = pd.concat([res,data],ignore_index=True)
+        res = pd.concat([res, data], ignore_index=True)
     res = preprocess_salaries(res)
-    res.dropna(axis=0,inplace=True)
+    res.dropna(axis=0, inplace=True)
     return res
 
 def load_data(csv_file_path: str) -> pd.DataFrame:
@@ -205,7 +329,8 @@ def limit_to_year_range(dataset: pd.DataFrame, start_year: int, stop_year: int) 
 def preprocess_salaries(data: pd.DataFrame, team: str = None) -> pd.DataFrame:
     dataset = data.copy()
     dataset['Player'] = dataset['first_name'] + ' ' + dataset['last_name']
-    dataset['Wage']   = dataset['base_salary'] + dataset['guaranteed_compensation']
+    dataset['Wage'] = dataset['base_salary'] + \
+        dataset['guaranteed_compensation']
     dataset.drop(columns=["first_name", "last_name", "position"], inplace=True)
     dataset.rename(columns={'club': "Club"}, inplace=True)
     if team is not None:
@@ -264,8 +389,8 @@ def preprocess_players(dataset: pd.DataFrame, team: str = None) -> pd.DataFrame:
                 dataset.drop(x, inplace=True)
 
     dataset = dataset[dataset.MINS >= MIN_MINS_PLAYED]
-    dataset = dataset[dataset.GP   >= MIN_GAMES_PLAYED]
-    
+    dataset = dataset[dataset.GP >= MIN_GAMES_PLAYED]
+
     return dataset
 # Quitar columnas que no usaremos
 # Which columns are more important?
@@ -365,7 +490,7 @@ def visualization(dataset: pd.DataFrame, param: str, year: int, position: str):
 def get_team_abv(team: str) -> str:
 
     reverse_dict = {'D.C. United': 'DC',
-                    'Chivas USA' : 'CHV',
+                    'Chivas USA': 'CHV',
                     'Houston Dynamo': 'HOU',
                     'New England Revolution': 'NE',
                     'FC Dallas': 'DAL',
@@ -395,14 +520,29 @@ def get_team_abv(team: str) -> str:
         words = team.split(" ")
         for i in words:
             res += i[0]
-    return reverse_dict.get(team,res)
+    return reverse_dict.get(team, res)
+
 
 def normalize_team_names(table_data: pd.DataFrame) -> pd.DataFrame:
     copy = table_data.copy()
     for x in copy.index:
-        copy.loc[x,"Team"] = get_team_abv(str(copy.loc[x,"Team"]).split(" (")[0])
-    copy.rename(columns={"Team":"Club"},inplace=True)
+        copy.loc[x, "Team"] = get_team_abv(
+            str(copy.loc[x, "Team"]).split(" (")[0])
+    copy.rename(columns={"Team": "Club"}, inplace=True)
     return copy
+
+
+def get_champions(data: pd.DataFrame) -> dict:
+    champion_pattern = r'\(([CWEUV]1?(\, [XS]{1,2})?|[XS]{1,2}\, [CWE]1?)\)'
+    yearly_champions = dict()
+    for year in range(2007, 2018):
+        yearly_champions[year] = dict()
+        for x in data[data.Year == year].index:
+            if re.search(champion_pattern, str(data.loc[x, "Team"])) is not None:
+                team = str(data.loc[x, "Team"]).split(" (")
+                yearly_champions[year][team[1]] = get_team_abv(team[0])
+    return yearly_champions
+
 
 def preprocess_table(data: pd.DataFrame, year: int = None, club: str = None) -> pd.DataFrame:
     champion_pattern = r'\(([CWEUV]1?(\, [XS]{1,2})?|[XS]{1,2}\, [CWE]1?)\)'
@@ -411,90 +551,96 @@ def preprocess_table(data: pd.DataFrame, year: int = None, club: str = None) -> 
     dataset = data.copy()
 
     if year is not None:
-        dataset = limit_to_year_range(dataset,year,year)
+        dataset = limit_to_year_range(dataset, year, year)
     else:
-        dataset = limit_to_year_range(dataset,2007,2017)
+        dataset = limit_to_year_range(dataset, 2007, 2017)
 
     dataset = dataset[dataset["Conference"] == "Overall"]
-    
+
     for x in dataset.index:
-        dataset.loc[x,"Champion"] = re.search(champion_pattern, str(dataset.loc[x, "Team"])) is not None
-        dataset.loc[x,"Shield"]   = re.search(shield_pattern  , str(dataset.loc[x, "Team"])) is not None
-        if dataset.loc[x,"Champion"]:
-            dataset.loc[x,"Num_Championships"] = 1
+        dataset.loc[x, "Champion"] = re.search(
+            champion_pattern, str(dataset.loc[x, "Team"])) is not None
+        dataset.loc[x, "Shield"] = re.search(
+            shield_pattern, str(dataset.loc[x, "Team"])) is not None
+        if dataset.loc[x, "Champion"]:
+            dataset.loc[x, "Num_Championships"] = 1
         else:
-            dataset.loc[x,"Num_Championships"] = 0
+            dataset.loc[x, "Num_Championships"] = 0
     dataset = normalize_team_names(dataset)
-    
-    dataset.drop(columns=["SW","SL","D","Qualification","Conference","Head-to-head","PPG"],inplace=True)
-    
+
+    dataset.drop(columns=["SW", "SL", "D", "Qualification",
+                 "Conference", "Head-to-head", "PPG"], inplace=True)
+
     if club is not None:
         dataset = dataset[dataset.Club == club]
-    
+
     return dataset
 
-def plot_salary_distribution(salary_dataset: pd.DataFrame,param = "base_salary"):
-    salary_dataset.sort_values(by=[param],inplace=True,ignore_index=True)
-    salary_group_index = get_salary_groups(salary_dataset[param],1.5)
-    
+
+def plot_salary_distribution(salary_dataset: pd.DataFrame, param="base_salary"):
+    salary_dataset.sort_values(by=[param], inplace=True, ignore_index=True)
+    salary_group_index = get_salary_groups(salary_dataset[param], 1.5)
+
     salary_axis = list()
     amount_axis = list()
-    
+
     low = 0
     for index in salary_group_index:
         high = index
         norm = high - low
         amount_axis.append(norm)
-        salary_axis.append(sum(salary_dataset.loc[low:high,param]) / norm)
+        salary_axis.append(sum(salary_dataset.loc[low:high, param]) / norm)
         low = high
     plt.title("MLS Salary Distribution 2007 - 2017")
     plt.xlabel(param)
     plt.ylabel("Amount of players")
-    plt.plot(salary_axis,amount_axis)
+    plt.plot(salary_axis, amount_axis)
     plt.show()
-    # print(salary_axis)
-    # print(len(amount_axis),(salary_axis))
-    
-    
+
+
+
 def plot_salary_param_distribution(salary_dataset: pd.DataFrame, param_list: list):
-    sorted_data = salary_dataset.sort_values(by=["Wage"],ignore_index=True)
+    sorted_data = salary_dataset.sort_values(by=["Wage"], ignore_index=True)
     correlation_dict_pd = dict()
     correlation_dict_made = dict()
     x_axis = sorted_data["Wage"].copy()
-    
+
     for param in param_list:
         # y_axis = sorted_data[param] / (sorted_data["MINS"] / 90)
         y_axis = sorted_data[param] / sorted_data["GP"]
-        sal_group, param_group = divide_to_salary_groups(x_axis,y_axis)
-        
+        sal_group, param_group = divide_to_salary_groups(x_axis, y_axis)
+
         plt.plot(sal_group, param_group, label=param)
-        correlation_dict_pd[param] = [(x_axis.cov(y_axis) / math.sqrt(x_axis.var() * y_axis.var())),param]
-        correlation_dict_made[param] = [calc_Pearson_correlation(x_axis,y_axis),param]
-        
-    #Plot Graphs
+        correlation_dict_pd[param] = [
+            (x_axis.cov(y_axis) / math.sqrt(x_axis.var() * y_axis.var())), param]
+        correlation_dict_made[param] = [
+            calc_Pearson_correlation(x_axis, y_axis), param]
+
+    # Plot Graphs
     plt.suptitle("MLS performance to salary from 2007-2017")
     plt.title("Normalize to highest personal stat")
     plt.xlabel("Base Salary + Guaranteed Compensation")
     plt.ylabel("Performance per Games Played over one seson")
     plt.legend(loc="upper left", ncol=3)
     plt.show()
-    
-    #Plot Pearson Scatter
+
+    # Plot Pearson Scatter
     plt.suptitle("MLS performance to salary Pearson-Correlation")
     plt.title("From 2007 to 2017")
-    x_axis = list(range(1,len(param_list) + 1))
+    x_axis = list(range(1, len(param_list) + 1))
     # y_data = sorted([y for y in correlation_dict_made.values()], key=lambda item: item[0],reverse=True)
-    y_data = sorted([y for y in correlation_dict_pd.values()], key=lambda item: item[0], reverse= True)
+    y_data = sorted([y for y in correlation_dict_pd.values()],
+                    key=lambda item: item[0], reverse=True)
     y_axis = [elem[0] for elem in y_data]
     labels = [elem[1] for elem in y_data]
     for index in range(len(x_axis)):
-        plt.scatter(x_axis[index],y_axis[index],label=labels[index])
+        plt.scatter(x_axis[index], y_axis[index], label=labels[index])
     plt.xlabel("Rank")
     plt.ylabel("Pearson Correlation")
     plt.legend()
     plt.show()
     return correlation_dict_pd
-    
+
 def get_salary_groups(salaries: pd.Series, rate: int = 1.3) -> list:
     base = salaries.loc[0]
     index_list = list()
@@ -515,11 +661,11 @@ def divide_to_salary_groups(salaries: pd.Series, parameter: pd.Series):
     low = 0
     for index in salary_group_index:
         high = index
-        norm = high - low 
+        norm = high - low
         salary_data = salaries.loc[low:high]
         parameter_data = parameter.loc[low: high]
         salary_axis.append(salary_data.sum() / norm)
-        param_axis.append(parameter_data.sum()/ norm)
+        param_axis.append(parameter_data.sum() / norm)
         low = high
     return salary_axis, param_axis
 
@@ -549,39 +695,44 @@ def var(data_list: pd.DataFrame) -> float:
     a = a / data_list.size
     return a - b
 
-def wins_by_parameter(table_data: pd.DataFrame, param_list: list,win_param: str = "W", group_factor = 1.4, group_index = 1):
+
+def wins_by_parameter(table_data: pd.DataFrame, param_list: list, win_param: str = "W", group_factor=1.4, group_index=1):
     team_performances_dict = dict()
     for param in param_list:
         x_axis = list()
         y_axis = list()
-        for year in range(2007,2018):
+        for year in range(2007, 2018):
             y_axis_yearly = table_data[table_data.Year == year][win_param]
             x_axis_param_yearly = table_data[table_data.Year == year][param]
             # zero_index_yearly = y_axis_yearly[y_axis_yearly.W == 0]
             # y_axis_yearly = y_axis_yearly[y_axis_yearly.W > 0]
-            
-            plt.scatter(x_axis_param_yearly,y_axis_yearly,label=year)
+
+            plt.scatter(x_axis_param_yearly, y_axis_yearly, label=year)
             x_axis += x_axis_param_yearly.tolist()
             y_axis += y_axis_yearly.tolist()
-        #Plot scatter of all data
+        # Plot scatter of all data
         plt.title(f"MLS {win_param} by {param} from 2007 to 2017")
         plt.xlabel(param)
         plt.ylabel(win_param)
         plt.legend()
         plt.show()
-        
-        #Plot Scatter of data groups
-        x_group_axis, y_group_axis = into_groups(x_axis, y_axis, group_factor, group_index)
+
+        # Plot Scatter of data groups
+        x_group_axis, y_group_axis = into_groups(
+            x_axis, y_axis, group_factor, group_index)
         if group_index == 1:
-            x_group_axis, y_group_axis = sort_to_plot(x_group_axis,y_group_axis)
-        
+            x_group_axis, y_group_axis = sort_to_plot(
+                x_group_axis, y_group_axis)
+
         plt.title(f"MLS {param} to {win_param} correlation from 2007 to 2017")
         plt.xlabel(f"total {param}")
         plt.ylabel(f"Yearly {win_param}")
-        plt.plot(x_group_axis,y_group_axis)
+        plt.plot(x_group_axis, y_group_axis)
         plt.show()
-        pearson = calc_Pearson_correlation(pd.Series(x_axis),pd.Series(y_axis))
-        team_performances_dict[param] = [x_group_axis,y_group_axis,pearson,param]
+        pearson = calc_Pearson_correlation(
+            pd.Series(x_axis), pd.Series(y_axis))
+        team_performances_dict[param] = [
+            x_group_axis, y_group_axis, pearson, param]
     for param in param_list:
         plt.title(f"MLS {param} to {win_param} correlation from 2007 to 2017")
         plt.xlabel(f"total {param}")
@@ -589,37 +740,44 @@ def wins_by_parameter(table_data: pd.DataFrame, param_list: list,win_param: str 
         data = team_performances_dict[param][0]
         x_axis = [x / max(data) for x in data]
         y_axis = team_performances_dict[param][1]
-        plt.plot(x_axis,y_axis, label=f"{param} corr: {team_performances_dict[param][2]}")
+        plt.plot(x_axis, y_axis,
+                 label=f"{param} corr: {team_performances_dict[param][2]}")
     plt.legend()
     plt.show()
-    
-    #plot pearson correlation
-    plt.title(f"MLS game-aspect to {win_param} pearson-correlation : 2007-2017")
+    print(team_performances_dict)
+    # plot pearson correlation
+    plt.title(
+        f"MLS game-aspect to {win_param} pearson-correlation : 2007-2017")
     plt.xlabel("Rank")
     plt.ylabel("Pearson Correlation")
     x_axis = list(range(1, len(param_list) + 1))
-    y_data = sorted([x for x in team_performances_dict.values()],key=lambda x: x[2],reverse=True)
-    
+    y_data = sorted([x for x in team_performances_dict.values()],
+                    key=lambda x: x[2], reverse=True)
+
     y_axis = [elem[2] for elem in y_data]
     labels = [elem[3] for elem in y_data]
-    
+
     for index in range(len(x_axis)):
-        plt.scatter(x_axis[index],y_axis[index],label=labels[index])
+        plt.scatter(x_axis[index], y_axis[index], label=labels[index])
     plt.legend()
     plt.show()
     return team_performances_dict
 
 ####################################################################################################
 
-def search_k_means_communities(teams,team_performance,salary_metrics, parameter, limit=ANALYSIS_BAR, x=AVG, y=MED, w=RAT):
-    output = create_salary_communities(teams,team_performance,salary_metrics, parameter, x, y, w)
+
+def search_k_means_communities(teams, team_performance, salary_metrics, parameter, limit=ANALYSIS_BAR, x=AVG, y=MED, w=RAT):
+    output = create_salary_communities(
+        teams, team_performance, salary_metrics, parameter, x, y, w)
     while max(output[2]) <= limit:
         print(f"max: {max(output[2])}, min: {min(output[2])}")
-        output = create_salary_communities(teams,team_performance,salary_metrics, "W")
+        output = create_salary_communities(
+            teams, team_performance, salary_metrics, "W")
     print(f"max: {max(output[2])}, min: {min(output[2])}")
     return output
 
-def create_salary_communities(team_list,team_performances,salary_metrics, parameter, x=AVG, y=MED, w=RAT):
+
+def create_salary_communities(team_list, team_performances, salary_metrics, parameter, x=AVG, y=MED, w=RAT):
     # team_list = resources[4]
     # team_performances = resources[7]
     # salary_metrics = resources[8]
@@ -653,10 +811,13 @@ def create_salary_communities(team_list,team_performances,salary_metrics, parame
     plt.show()
     # PLOT 3D AMS COMMUNITIES
     norm = normalize_for_k_means(x_axis, y_axis, z_axis)
-    communities = k_means((x_axis, y_axis, z_axis), norm, K, AMS_DIM, K_MEAN_STEPS)
-    x_axis, y_axis, z_axis, size_axis, balance_axis = centroids_to_points(communities)
+    communities = k_means((x_axis, y_axis, z_axis),
+                          norm, K, AMS_DIM, K_MEAN_STEPS)
+    x_axis, y_axis, z_axis, size_axis, balance_axis = centroids_to_points(
+        communities)
     ax = plt.axes(projection='3d')
-    ax.scatter3D(x_axis, y_axis, z_axis, s=size_axis, color="orange", edgecolor="black")
+    ax.scatter3D(x_axis, y_axis, z_axis, s=size_axis,
+                 color="orange", edgecolor="black")
     ax.set_xlabel(x)
     ax.set_ylabel(y)
     ax.set_zlabel(parameter)
@@ -667,7 +828,8 @@ def create_salary_communities(team_list,team_performances,salary_metrics, parame
     for index in range(len(x_axis)):
         if balance_axis[index] != -1 and z_axis != 0:
             label = f"BS: {arrange_decimal_point(balance_axis[index])}, W: {arrange_decimal_point(z_axis[index])}"
-            plt.scatter(z_axis[index], balance_axis[index], s=size_axis[index], label=label)
+            plt.scatter(z_axis[index], balance_axis[index],
+                        s=size_axis[index], label=label)
     plt.title(f"MLS AMS communities {parameter} to {w} : 2007-2017")
     plt.xlabel(parameter)
     plt.ylabel(f"{w}")
@@ -823,10 +985,10 @@ def calculate_team_salary_metrics(players_dictionary: pd.DataFrame, team_list):
     salary_metrics = dict()
     # for player in players_dictionary.values():
     for x in players_dictionary.index:
-        team = players_dictionary.loc[x,"Club"]
+        team = players_dictionary.loc[x, "Club"]
         if team not in salary_metrics:
             salary_metrics[team] = [[], 0, dict()]
-        salary_metrics[team][0].append(players_dictionary.loc[x,"Wage"])
+        salary_metrics[team][0].append(players_dictionary.loc[x, "Wage"])
         salary_metrics[team][1] += 1
     for team in team_list:
         element = salary_metrics[team]
@@ -846,11 +1008,12 @@ def calculate_team_salary_metrics_yearly(players_dictionary: pd.DataFrame, team_
     salary_metrics = dict()
     # for player in players_dictionary.values():
     for x in players_dictionary.index:
-        team = players_dictionary.loc[x,"Club"]
-        year = players_dictionary.loc[x,"Year"]
+        team = players_dictionary.loc[x, "Club"]
+        year = players_dictionary.loc[x, "Year"]
         if (team, year) not in salary_metrics:
             salary_metrics[(team, year)] = [[], 0, dict()]
-        salary_metrics[(team, year)][0].append(players_dictionary.loc[x,"Wage"])
+        salary_metrics[(team, year)][0].append(
+            players_dictionary.loc[x, "Wage"])
         salary_metrics[(team, year)][1] += 1
     for team in team_list:
         for year in range(2007, 2018):
@@ -898,9 +1061,13 @@ def create_team_performance_dict(players_data, team_dataset: pd.DataFrame, team_
         for team in team_list:
             team_data = dict()
             # team_data["W"] = count_wins(team_dataset, team, year)
-            team_data["W"] = team_dataset[(team_dataset.Club == team) & (team_dataset.Year == year)]["W"].sum()
+            team_data["W"] = team_dataset[(team_dataset.Club == team) & (
+                team_dataset.Year == year)]["W"].sum()
+            team_data["Pts"] = team_dataset[(team_dataset.Club == team) & (
+                team_dataset.Year == year)]["Pts"].sum()
             for parameter in parameter_list:
-                team_data[parameter] = sum_team_parameter_per_year(players_data, parameter, year, team)
+                team_data[parameter] = sum_team_parameter_per_year(
+                    players_data, parameter, year, team)
             year_performance[team] = team_data
         teams_performances[year] = year_performance
     return teams_performances
@@ -910,8 +1077,9 @@ def sum_team_parameter_per_year(players_dictionary: pd.DataFrame, parameter, yea
     #     if key[YEAR_INDEX] == year and key[TEAM_INDEX] == team:
     #         if type(players_dictionary[key][parameter]) != str:
     #             parameter_sum += players_dictionary[key][parameter]
-    param_sum = players_dictionary[(players_dictionary.Year == year) & (players_dictionary.Club == team)][parameter].sum()
-    
+    param_sum = players_dictionary[(players_dictionary.Year == year) & (
+        players_dictionary.Club == team)][parameter].sum()
+
     return param_sum
 
 def into_groups(x_axis, y_axis, group_factor, group_index=0):
@@ -951,11 +1119,182 @@ def sort_to_plot(base_x_axis, base_y_axis):
         y_axis.append(sorted_list[index][1])
     return x_axis, y_axis
 
+def train_evaluation(team_list, team_performance, yearly_salary):
+    # team_list = resources[4]
+    # team_performance = resources[7]
+    # yearly_salary = resources[8]
+    column = range(0, 40, 4)
+    golden_ratio = [[3.2, 6.0]]
+    bad_zone = 1.9  # 6?
+    search_score = 0
+    champion_find = 0
+    loser_find = 0
+    count = 0
+    top_x_list = list()
+    top_y_list = list()
+    bottom_x_list = list()
+    bottom_y_list = list()
+    top_flag = False
+    bottom_flag = False
+    east_flag = False
+    west_flag = False
+    for year in range(2007, 2017+1):
+        year_wins_list = [team_performance[year][team]["W"]
+                          for team in team_list]
+        top, bottom = get_top_bottom(year_wins_list)
+        for team in team_list:
+            try:
+                count += 1
+                color = 'orange'
+                edge = 'white'
+                x = yearly_salary[(team, year)][2][RAT]
+                y = team_performance[year][team]["W"]
+                if REG_SEASON_WEST[year] == team:
+                    color = 'blue'
+                    edge = 'black'
+                    if get_search_score(x, golden_ratio) > 0:
+                        champion_find += 5
+                    if not west_flag:
+                        plt.scatter(x, y, color=color, edgecolors=edge,
+                                    label="west champion")
+                        west_flag = True
+                    plt.scatter(x, y, color=color, edgecolors=edge)
+                elif REG_SEASON_EAST[year] == team:
+                    color = 'purple'
+                    edge = 'black'
+                    if get_search_score(x, golden_ratio) > 0:
+                        champion_find += 5
+                    if not east_flag:
+                        plt.scatter(x, y, color=color, edgecolors=edge,
+                                    label="east champion")
+                        east_flag = True
+                    plt.scatter(x, y, color=color, edgecolors=edge)
+                elif y >= top:
+                    search_score += get_search_score(x, golden_ratio)
+                    color = 'green'
+                    edge = 'black'
+                    top_x_list.append(x)
+                    top_y_list.append(y)
+                    if not top_flag:
+                        plt.scatter(x, y, color=color,
+                                    edgecolors=edge, label="best 10%")
+                        top_flag = True
+                    plt.scatter(x, y, color=color, edgecolors=edge)
+                elif y <= bottom:
+                    color = 'red'
+                    edge = 'black'
+                    bottom_x_list.append(x)
+                    bottom_y_list.append(y)
+                    if x > bad_zone:
+                        loser_find += 1
+                    if not bottom_flag:
+                        plt.scatter(x, y, color=color,
+                                    edgecolors=edge, label="worst 30%")
+                        bottom_flag = True
+                    plt.scatter(x, y, color=color, edgecolors=edge)
+                else:
+                    plt.scatter(x, y, color=color, edgecolors=edge)
+            except KeyError:
+                1+1
+    # PLOTS
+    plt.plot([3.2 ] * 10, column, label="BS: 3.2", color="green")
+    plt.plot([6.00] * 10, column, label="BS: 6.00", color="green")
+    plt.plot([bad_zone] * 10, column, label=f"BS: {bad_zone}", color="red")
+    plt.suptitle(f"MLS wins to Balance-Score : {2007}-{2017}")
+    plt.title("Evaluation plot")
+    plt.xlabel("Balance Score")
+    plt.ylabel("wins")
+    plt.legend()
+    plt.show()
+    print(f"Recall: {search_score}/{count * 0.1} of best 10%")
+    print(f"champions: {champion_find}%")
+    print(f"Recall: {loser_find}/{count * 0.3} of worst 30%")
+    print(st.spearmanr(top_x_list, top_y_list))
+    print(st.pearsonr(top_x_list, top_y_list))
+    print(st.spearmanr(bottom_x_list, bottom_y_list))
+    print(st.pearsonr(bottom_x_list, bottom_y_list))
+    
+def evaluation(salary_metric, team_list):
+    # salary_metric = resources[6]
+    # team_list = resources[4]
+    column = range(0, 33, 3)
+    top_flag = False
+    bottom_flag = False
+    golden_ratio = [[3.2, 6.0]]
+    bad_zone = 1.9 #beyond this, you're usually bad team
+    search_score = 0
+    champion_find = 0
+    loser_find = 0
+    for team in team_list:
+        try:
+            x = salary_metric[team][2][RAT]
+            y = EVALUATION_WINS_2020[team]
+            if x > 0:
+                edge = 'white'
+                color = 'orange'
+                if team == 'CLB':
+                    edge = 'black'
+                    color = 'blue'
+                    plt.scatter(x, y, color=color, edgecolors=edge, label='Champion')
+                    if get_search_score(x, golden_ratio) > 0:
+                        champion_find += 100
+                        search_score += 1
+                elif y >= 12: #upper
+                    search_score += get_search_score(x, golden_ratio)
+                    color = 'green'
+                    edge = 'black'
+                    if not top_flag:
+                        plt.scatter(x, y, color=color, edgecolors=edge, label="top 10%")
+                        top_flag = True
+                    else:
+                        plt.scatter(x, y, color=color, edgecolors=edge)
+                elif y <= 8: #lower
+                    color = 'red'
+                    edge = 'black'
+                    if x < bad_zone:
+                        loser_find += 1
+                    if not bottom_flag:
+                        plt.scatter(x, y, color=color, edgecolors=edge, label="bottom 30%")
+                        bottom_flag = True
+                    else:
+                        plt.scatter(x, y, color=color, edgecolors=edge)
+                else:
+                    plt.scatter(x, y, color=color, edgecolors=edge)
+        except KeyError:
+            1+1
+    # PLOTS
+    plt.plot([3.2] * 11, column, label="BS: 3.2", color="green")
+    plt.plot([6.0] * 11, column, label="BS: 6.0", color="green")
+    plt.plot([1.9] * 11, column, label="BS: 1.9", color="red")
+    plt.suptitle(f"MLS wins to Balance-Score : {2020}")
+    plt.title("Evaluation plot")
+    plt.xlabel("Balance Score")
+    plt.ylabel("wins")
+    plt.legend()
+    plt.show()
+    print(f"Recall: {search_score}/2 of best 10%")
+    print(f"champions: {champion_find}%")
+    print(f"Recall: {loser_find}/7 under 10 wins")
+
+
+def get_top_bottom(wins_list):
+    sorted_list = sorted(wins_list, key=lambda elem: elem)
+    return sorted_list[-3], sorted_list[8]
+
+
+def get_search_score(x, golden_ratio):
+    for interval in golden_ratio:
+        if interval[0] < x < interval[1]:
+            return 1
+    return 0
+
+
 def get_players_data() -> pd.DataFrame:
     data = load_data(PLAYER_DATASET)
     data = preprocess_players(data)
-    col = [x for x in list(data.columns) if x not in COLUMNS_PLAYERS + DEFAULT_STATS]
-    data.drop(col,axis=1, inplace=True)
+    col = [x for x in list(data.columns)
+           if x not in COLUMNS_PLAYERS + DEFAULT_STATS]
+    data.drop(col, axis=1, inplace=True)
     return data
 
 def get_table_data() -> pd.DataFrame:
@@ -983,43 +1322,65 @@ if __name__ == "__main__":
     table = get_table_data()
     salary = get_full_salaries()
     players = get_players_data()
-    dataset = pd.merge(salary,players,on=["Player","Year","Club"]) #Players and Salary dataset
+    # Players and Salary dataset
+    dataset = pd.merge(salary, players, on=["Player", "Year", "Club"])
     # plot_salary_distribution(dataset,"Wage")
-    # tm_pf_dict = plot_salary_param_distribution(dataset,["G","A","SOG","GWG","GWA"])
+    # tm_pf_dict = plot_salary_param_distribution(dataset,["G","A","SOG","GWG","GWA","G/90min","A/90min"])
+    # print(tm_pf_dict)
     # dataset["Wage"].plot.hist(by=["Year"])
     # plt.show()
-    
-    param_list= ["G","A","SOG","G/90min","A/90min"]
-    team_performances = players[["Club","Year","G","A","SOG","GWG","GWA","G/90min","A/90min"]].groupby(["Club","Year"]).sum()
-    team_performances = pd.merge(team_performances,table,on=["Club","Year"])
-    
+
+    param_list = ["G", "A", "SOG", "GWG", "GWA", "G/90min", "A/90min"]
+    team_performances = players[["Club", "Year", "G", "A", "SOG", "GWG",
+                                 "GWA", "G/90min", "A/90min"]].groupby(["Club", "Year"]).sum()
+    team_performances = pd.merge(team_performances, table, on=["Club", "Year"])
+
     # tm_pf_dict1 = wins_by_parameter(team_performances,param_list)
-    data = salary[["Club","base_salary","Year"]].groupby(["Club","Year"]).sum()
-    data2 = pd.merge(data,table,on=["Club","Year"])
+    # print(tm_pf_dict1)
+    data = salary[["Club", "base_salary", "Year"]
+                  ].groupby(["Club", "Year"]).sum()
+    data2 = pd.merge(data, table, on=["Club", "Year"])
     team_list = dataset["Club"].unique().tolist()
+
+    team_performance_dict = create_team_performance_dict(
+        players, table, team_list)
+    salary_metrics_dict = calculate_team_salary_metrics_yearly(
+        dataset, team_list)
     
-    team_performance_dict = create_team_performance_dict(players,table,team_list)
-    salary_metrics_dict = calculate_team_salary_metrics_yearly(dataset,team_list)
+    salary_metrics_1 = calculate_team_salary_metrics(dataset,team_list)
+
     
-    search_k_means_communities(team_list,team_performance_dict,salary_metrics_dict,"W")
+
+    # EVALUATION
+    # search_k_means_communities(team_list,team_performance_dict,salary_metrics_dict,"W")
+    train_evaluation(team_list, team_performance_dict,salary_metrics_dict) 
+    # evaluation(salary_metrics_1,team_list)
+    
     
     # print(team_performances.head())
     # print(team_performances.columns)
     # champions = team_performances[team_performances["Champion"] == True]
     # print(champions["Club"].value_counts())
-    
+
     # tm_pf_dict2 = wins_by_parameter(team_performances,param_list,"Num_Championships")
     # pearson_distance(tm_pf_dict,tm_pf_dict2)
-    
-    
+
     # print(team_performances.columns)
     # data3 = team_performances.groupby(["Club","Champion"]).size().unstack(fill_value=0).reset_index()
     # # data3.fillna(0,inplace=True)
     # data3['number_torunaments'] = data3[False] + data3[True]
     # data3.rename(columns={True:'Num_Championships',False:'No_championship'},inplace=True)
-    
+
     # # data3['proportion_championships'] = data3[True] / data3[False]
     # # data3.sort_values('proportion_championships',ascending=False,inplace=True)
     # print(data3.head())
     
+    champion_pattern = r'\(([CWEUV]1?(\, [XS]{1,2})?|[XS]{1,2}\, [CWE]1?)\)'
+    table_data = load_data(TEAM_DATASET)
+    table_data = preprocess_table(table_data,2020)
+    
+    win_dict = dict()
+    for x in table_data[["Club","W"]].index:
+        win_dict[table_data.loc[x,"Club"]] = table_data.loc[x,"W"]
+    # print(win_dict)    
     
