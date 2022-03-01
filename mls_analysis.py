@@ -10,6 +10,7 @@ from scipy import stats as st
 
 #  =====Datasets====
 #   "all_players.csv": all outfield player data from every season of MLS through 2020 (1996-2020)
+#   @url: https://www.kaggle.com/josephvm/major-league-soccer-dataset 
 #   Columns:
 #   -Player
 #   -Club
@@ -40,7 +41,28 @@ from scipy import stats as st
 #   -Year
 #   -Season
 #
+#   "all_tables.csv":
+#   Columns:
+#   - POS table position
+#   - Team
+#   - GP Games Played
+#   - W Wins
+#   - L Loss
+#   - SW
+#   - GF Goals for
+#   - GA Goals Against
+#   - GD Goals Difference
+#   - Pts Points
+#   - Qualification
+#   - Conference
+#   - Year
+#   - SL
+#   - D
+#   - Head-to-head
+#   - PPG
+#
 #   "mls-salaries-20XX.csv":
+#   @url: https://www.kaggle.com/crawford/us-major-league-soccer-salaries
 #   Columns:
 #   -Club
 #   -last_name
@@ -78,7 +100,7 @@ STATS_DICT = {
     "D": ["A", "FC", "A/90min", "G"]
 }
 
-DEFAULT_STATS = ["G", "A", "SOG", "FC", "G/90min", "A/90min", "GWG", "GWA"]
+DEFAULT_STATS = ["G", "A", "SOG", "G/90min", "A/90min", "GWG", "GWA"]
 
 MLS_TEAMS_DICT = {
     "ATL"   : "Atlanta United Football Club",
@@ -105,25 +127,7 @@ MLS_TEAMS_DICT = {
     "MTL"   : "CF Montreal",
     "LAFC"  : "Los Angeles Football Club",
     "ORL"   : "Orlando City Soccer Club",
-    "CHV"   : "Chivas USA",
-    # "SJ",
-    # "MIA",
-    # "NSH",
-    # "PAN",
-    # "SKC",
-    # "SLV",
-    # "MIN":"Minnessota?",      Estandarizar
-    # "HAI",
-    # "USA",
-    # "ROC",
-    # "ECU",
-    # "HON",
-    # "CIN",
-    # "NYC": "New York City RB",    Estandarizar
-    # "NYR": "New York City Red Bull", Estandarizar
-    # "CAN",
-    # "RBNY": "New York Red Bull", Estandarizar
-    # "JAM"
+    "CHV"   : "Chivas USA"
 }
 
 POS_DICT = {
@@ -150,19 +154,6 @@ STATS_MEANING_DICT = {
     "FC": "Fouls Commited"
 }
 
-CHAMPION_DICT = {
-    "2007": {"SS, E1)": "DC", "W1)": "CHV"},
-    "2008": {"SS, E1)": "CLB", "W1)": "HOU"},
-    "2009": {"SS, E1)": "CLB", "W1)": "LA"},
-    "2010": {"SS, W1)": "LA", "E1)": "NYRB"},
-    "2011": {"SS, W1)": "LA", "E1)": "KC"},
-    "2012": {"E1)": "KC", "SS, W1)": "SJ"},
-    "2013": {"SS, E1)": "NYRB", "W1)": "POR"},
-    "2014": {"SS, W1)": "SEA", "E1)": "DC"},
-    "2015": {"C)": "POR"},
-    "2016": {"C)": "SEA"},
-    "2017": {"C, X)": "TFC"}
-}
 
 REG_SEASON_WEST = {
     2007: "CHV",
@@ -313,20 +304,32 @@ def load_data(csv_file_path: str) -> pd.DataFrame:
     data = pd.read_csv(csv_file_path)
     return data
 
-# limits the dataset to the interval of years provided
-
-
 def limit_to_year_range(dataset: pd.DataFrame, start_year: int, stop_year: int) -> pd.DataFrame:
+    """Limits the dataset to the interval of years provided
+
+    Args:
+        dataset (pd.DataFrame): DataFrame containing data
+        start_year (int): Start year of limit
+        stop_year (int): End year of limit
+
+    Returns:
+        pd.DataFrame: Dataframe limited by the years provided
+    """
     dataset = dataset[dataset.Year > start_year - 1]
     dataset = dataset[dataset.Year < stop_year + 1]
     return dataset
 
-# Combines the two names fields into a single field.
-# Homologues the "club" field name with the one from player stats
-# Optional param to limit the salary to a specific team.
-
-
 def preprocess_salaries(data: pd.DataFrame, team: str = None) -> pd.DataFrame:
+    """Adds columns first_name and last_name to create field Player. 
+       Homologues the "club" field name.
+
+    Args:
+        data (pd.DataFrame): Dataframe containg salarys data
+        team (str, optional): Abv of the team if wanted to limit. Defaults to None.
+
+    Returns:
+        pd.DataFrame: Modified DataFrame 
+    """
     dataset = data.copy()
     dataset['Player'] = dataset['first_name'] + ' ' + dataset['last_name']
     dataset['Wage'] = dataset['base_salary'] + \
@@ -339,10 +342,12 @@ def preprocess_salaries(data: pd.DataFrame, team: str = None) -> pd.DataFrame:
                 dataset.drop(x, inplace=True)
     return dataset
 
-# Get the list of teams from the .csv salaries files.
-
-
 def get_teams_from_salaries() -> list:
+    """Get the list of teams from the .csv salaries files.
+
+    Returns:
+        list: List of teams from the salary files
+    """
     teams = []
     for year in range(2007, 2018):
         data = get_year_salary(year)
@@ -352,10 +357,15 @@ def get_teams_from_salaries() -> list:
                 teams.append(str(team))
     return teams
 
-# pseudo-switch-case to change the name of teams that are the same with different abbreviations
-
-
 def normalize_team(team: str) -> str:
+    """pseudo-switch-case to change the name of teams that are the same with different abbreviations
+
+    Args:
+        team (str): Abv. of the team to transform
+
+    Returns:
+        str: Abv normalized
+    """
     switcher = {
         "MIN": "MNUFC",
         "NYC": "NYCFC",
@@ -368,17 +378,24 @@ def normalize_team(team: str) -> str:
 
     return switcher.get(team, team)
 
-# limits player data to the years from which we have info
-# remove teams that doesn't appear in the salaries files
-# normalize team names in the file
+# 
 
 
 def preprocess_players(dataset: pd.DataFrame, team: str = None) -> pd.DataFrame:
-    # Quitar equipos que no aparezcan en los salarios
+    """limits player data to the years from which we have info
+       remove teams that doesn't appear in the salaries files
+       normalize team names in the file
+
+    Args:
+        dataset (pd.DataFrame): DataFrame from the players
+        team (str, optional): Team name to limit the data. Defaults to None.
+
+    Returns:
+        pd.DataFrame: Modified dataFrame
+    """
     dataset = limit_to_year_range(dataset, 2007, 2017)
     teams = get_teams_from_salaries()
     for x in dataset.index:
-        # Remove spaces and normalize teams with different abreviation
         dataset.loc[x, "Club"] = normalize_team(
             str(dataset.loc[x, "Club"]).strip())
         if dataset.loc[x, "Club"] not in teams:
@@ -392,18 +409,20 @@ def preprocess_players(dataset: pd.DataFrame, team: str = None) -> pd.DataFrame:
     dataset = dataset[dataset.GP >= MIN_GAMES_PLAYED]
 
     return dataset
-# Quitar columnas que no usaremos
-# Which columns are more important?
-#Player, Club, Position,
-# For each position, different stats.
-# Forward, Mid-Forward, Forward-Mid -> Goals, Assist, SOG%
-# Midfielder, Mid-Forward, Mid-Defender -> Assist, GWA, A/90min, Goals(?)
-# Defender, Mid-Defender, Defender-Mid -> Assists, Fouls Commited (negative relation?), A/90min, Goals(?)
 
-# limit a dataframe by one specific position
+
 
 
 def limit_by_position(dataset: pd.DataFrame, position: str) -> pd.DataFrame:
+    """# limit a dataframe by one specific position
+
+    Args:
+        dataset (pd.DataFrame): dataFrame containing players dataset
+        position (str): Position to limit the dataFrame
+
+    Returns:
+        pd.DataFrame: Modified dataFrame
+    """
 
     data = dataset.copy()
 
@@ -422,11 +441,18 @@ def limit_by_position(dataset: pd.DataFrame, position: str) -> pd.DataFrame:
 
     return data
 
-# Matches the player data stats with the salary info on them according to year.
-# Can match only a specific team if desired
-
-
 def combine_players_salaries(players_data: pd.DataFrame, year: int, team: str = None) -> pd.DataFrame:
+    """Matches the player data stats with the salary info on them according to year.
+       Can match only a specific team if desired
+
+    Args:
+        players_data (pd.DataFrame): DataFrame of the players data
+        year (int): Desired year to filter
+        team (str, optional): Team bv to filter. Defaults to None.
+
+    Returns:
+        pd.DataFrame: Modified DataFrame
+    """
     players_data = limit_to_year_range(players_data, year, year)
     salary_data = get_year_salary(year)
     salary_data = preprocess_salaries(salary_data, team)
@@ -434,12 +460,20 @@ def combine_players_salaries(players_data: pd.DataFrame, year: int, team: str = 
 
     return data
 
-# Generates visualization according to a specific param vs. base_salary std deviation of each team.
-# Plot made by year and position.
-# The plot is saved in the computer.
+# 
 
 
 def visualization(dataset: pd.DataFrame, param: str, year: int, position: str):
+    """Generates visualization according to a specific param vs. base_salary std deviation of each team.
+# Plot made by year and position.
+# The plot is saved in the computer.
+
+    Args:
+        dataset (pd.DataFrame): DataFrame containing necessary data
+        param (str): param to plot
+        year (int): year to be plot
+        position (str): position of the player to be plot
+    """
     dataset = combine_players_salaries(dataset, year)
     # Standard Deviation of Base Salary per team.
     salaries_per_team = dataset[["Club", "base_salary"]].groupby([
@@ -488,6 +522,14 @@ def visualization(dataset: pd.DataFrame, param: str, year: int, position: str):
 
 
 def get_team_abv(team: str) -> str:
+    """Gets the team abreviation depending to the complete name
+
+    Args:
+        team (str): Full name of the team
+
+    Returns:
+        str: ABV of the team from dictionary or generated.
+    """
 
     reverse_dict = {'D.C. United': 'DC',
                     'Chivas USA': 'CHV',
@@ -524,6 +566,14 @@ def get_team_abv(team: str) -> str:
 
 
 def normalize_team_names(table_data: pd.DataFrame) -> pd.DataFrame:
+    """Standarize the team names from the Table Dataframe
+
+    Args:
+        table_data (pd.DataFrame): Dataframe containing the table data.
+
+    Returns:
+        pd.DataFrame: Modified table Data
+    """
     copy = table_data.copy()
     for x in copy.index:
         copy.loc[x, "Team"] = get_team_abv(
@@ -533,6 +583,14 @@ def normalize_team_names(table_data: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_champions(data: pd.DataFrame) -> dict:
+    """Obtain the champions from every Year
+
+    Args:
+        data (pd.DataFrame): DataFrame of the table position without normalized teams
+
+    Returns:
+        dict: Dictionary containing the champions of every
+    """
     champion_pattern = r'\(([CWEUV]1?(\, [XS]{1,2})?|[XS]{1,2}\, [CWE]1?)\)'
     yearly_champions = dict()
     for year in range(2007, 2018):
@@ -545,6 +603,16 @@ def get_champions(data: pd.DataFrame) -> dict:
 
 
 def preprocess_table(data: pd.DataFrame, year: int = None, club: str = None) -> pd.DataFrame:
+    """Process the table data to standarize to the values worked
+
+    Args:
+        data (pd.DataFrame): Raw Data of the Table information
+        year (int, optional): Year to limit data. Defaults to None.
+        club (str, optional): Club name to limit data. Defaults to None.
+
+    Returns:
+        pd.DataFrame: Modified DataFrame. Limited by year and TeamNames normalized.
+    """
     champion_pattern = r'\(([CWEUV]1?(\, [XS]{1,2})?|[XS]{1,2}\, [CWE]1?)\)'
     shield_pattern = r'\(([XS]{1,2}(\, [A-Z]1?)?|[CEW]1?\, [XS]{1,2})\)'
 
@@ -578,6 +646,12 @@ def preprocess_table(data: pd.DataFrame, year: int = None, club: str = None) -> 
 
 
 def plot_salary_distribution(salary_dataset: pd.DataFrame, param="base_salary"):
+    """Plots the income distribution using the data.
+
+    Args:
+        salary_dataset (pd.DataFrame): DataFrame containing the salary data
+        param (str, optional): Param to plot the distribution. Defaults to "base_salary".
+    """
     salary_dataset.sort_values(by=[param], inplace=True, ignore_index=True)
     salary_group_index = get_salary_groups(salary_dataset[param], 1.5)
 
@@ -599,7 +673,16 @@ def plot_salary_distribution(salary_dataset: pd.DataFrame, param="base_salary"):
 
 
 
-def plot_salary_param_distribution(salary_dataset: pd.DataFrame, param_list: list):
+def plot_salary_param_distribution(salary_dataset: pd.DataFrame, param_list: list) -> dict:
+    """Plots salary distribution against a parameter list.
+
+    Args:
+        salary_dataset (pd.DataFrame): Dataframe containing the salary and parameters information
+        param_list (list): List of parameters to plot against
+
+    Returns:
+        dict: Dictionary containing the correlation of the param
+    """
     sorted_data = salary_dataset.sort_values(by=["Wage"], ignore_index=True)
     correlation_dict_pd = dict()
     correlation_dict_made = dict()
@@ -642,6 +725,15 @@ def plot_salary_param_distribution(salary_dataset: pd.DataFrame, param_list: lis
     return correlation_dict_pd
 
 def get_salary_groups(salaries: pd.Series, rate: int = 1.3) -> list:
+    """Obtains the salary groups
+
+    Args:
+        salaries (pd.Series): DataFrame containing Salary Data
+        rate (int, optional): Rate. Defaults to 1.3.
+
+    Returns:
+        list: List containing salary groups.
+    """
     base = salaries.loc[0]
     index_list = list()
     cur_index = 0
@@ -655,6 +747,15 @@ def get_salary_groups(salaries: pd.Series, rate: int = 1.3) -> list:
     return index_list
 
 def divide_to_salary_groups(salaries: pd.Series, parameter: pd.Series):
+    """Divides the dataframe to the salary groups
+
+    Args:
+        salaries (pd.Series): Salary DataFrame
+        parameter (pd.Series): Param to divide the DataFrame
+
+    Returns:
+        list,list: Lists containing both axis
+    """
     salary_group_index = get_salary_groups(salaries)
     salary_axis = list()
     param_axis = list()
@@ -670,12 +771,30 @@ def divide_to_salary_groups(salaries: pd.Series, parameter: pd.Series):
     return salary_axis, param_axis
 
 def calc_Pearson_correlation(data_list1: pd.Series, data_list2: pd.Series) -> float:
+    """Calculates pearson correlation between the two Series
+
+    Args:
+        data_list1 (pd.Series): Series containing the first  parameter
+        data_list2 (pd.Series): Series containing the second parameter
+
+    Returns:
+        float: Pearson correlation of both parameters
+    """
     covariance = cov(data_list1, data_list2)
     sqrt_var = math.sqrt(var(data_list1) * var(data_list2))
     return covariance / sqrt_var
 
 
 def cov(data_list1: pd.Series, data_list2: pd.Series) -> float:
+    """Calculates covariance of between the two Series
+
+    Args:
+        data_list1 (pd.Series): Serie containing the first parameter
+        data_list2 (pd.Series): Serie containing the second parameter
+
+    Returns:
+        float: covariance of both parameters
+    """
     m1 = data_list1.sum() / data_list1.size
     m2 = data_list2.sum() / data_list2.size
     m3 = 0
@@ -688,6 +807,14 @@ def cov(data_list1: pd.Series, data_list2: pd.Series) -> float:
 
 
 def var(data_list: pd.DataFrame) -> float:
+    """Calculates de variance of the data
+
+    Args:
+        data_list (pd.DataFrame): DataFrame containing the data     
+
+    Returns:
+        float: Variance of the DataFrame
+    """
     b = (data_list.sum() / data_list.size) ** 2
     a = 0
     for elem in data_list:
@@ -696,7 +823,19 @@ def var(data_list: pd.DataFrame) -> float:
     return a - b
 
 
-def wins_by_parameter(table_data: pd.DataFrame, param_list: list, win_param: str = "W", group_factor=1.4, group_index=1):
+def wins_by_parameter(table_data: pd.DataFrame, param_list: list, win_param: str = "W", group_factor=1.4, group_index=1) -> dict:
+    """plots the number of wins according to a parameter
+
+    Args:
+        table_data (pd.DataFrame): DataFrame containing the teams data and sum of parameters per team
+        param_list (list): list of parameters to plot
+        win_param (str, optional): Win parameter to plot against. Defaults to "W".
+        group_factor (float, optional): Factor to group. Defaults to 1.4.
+        group_index (int, optional): Index to group. Defaults to 1.
+
+    Returns:
+        dict: Dictionary containing team performances
+    """
     team_performances_dict = dict()
     for param in param_list:
         x_axis = list()
@@ -763,10 +902,22 @@ def wins_by_parameter(table_data: pd.DataFrame, param_list: list, win_param: str
     plt.show()
     return team_performances_dict
 
-####################################################################################################
-
-
 def search_k_means_communities(teams, team_performance, salary_metrics, parameter, limit=ANALYSIS_BAR, x=AVG, y=MED, w=RAT):
+    """Search for k mean communities between the team_performance, salary metrics against a parameter
+
+    Args:
+        teams (list): list of teams
+        team_performance (dict): Dictionary of teams performance
+        salary_metrics (dict): Dictionary of salary metrics
+        parameter (str): Param to find the communities
+        limit (int, optional): Limit for the analysis to stop. Defaults to ANALYSIS_BAR.
+        x (str, optional): Parameter for x-axis. Defaults to AVG.
+        y (str, optional): Parameter for y-axis. Defaults to MED.
+        w (str, optional): Parameter for z-axis. Defaults to RAT.
+
+    Returns:
+        _type_: _description_
+    """
     output = create_salary_communities(
         teams, team_performance, salary_metrics, parameter, x, y, w)
     while max(output[2]) <= limit:
@@ -778,9 +929,21 @@ def search_k_means_communities(teams, team_performance, salary_metrics, paramete
 
 
 def create_salary_communities(team_list, team_performances, salary_metrics, parameter, x=AVG, y=MED, w=RAT):
-    # team_list = resources[4]
-    # team_performances = resources[7]
-    # salary_metrics = resources[8]
+    """Creates salary communities from the data
+
+    Args:
+        team_list (list): List of teams
+        team_performances (dict): Dictionary containing team performances data
+        salary_metrics (dict): Dictionary containing the salary metrics
+        parameter (str): Parameter to find community against
+        x (str, optional): Parameter for x-axis. Defaults to AVG.
+        y (str, optional): Parameter for y-axis. Defaults to MED.
+        w (str, optional): Parameter for z-axis. Defaults to RAT.
+
+    Returns:
+        list,list,list,list,list: Lists of the Data of the communities
+    """
+
     x_axis = list()
     y_axis = list()
     z_axis = list()
@@ -838,6 +1001,14 @@ def create_salary_communities(team_list, team_performances, salary_metrics, para
     return x_axis, y_axis, z_axis, size_axis, balance_axis
 
 def centroids_to_points(communities):
+    """Obtains the centroids and transforms it to points
+
+    Args:
+        communities (dict): Dictionary containing communities
+
+    Returns:
+        list,list,list,list,list: list containing data of the centroids for the plot
+    """
     x_axis = list()
     y_axis = list()
     z_axis = list()
@@ -856,6 +1027,16 @@ def centroids_to_points(communities):
     return x_axis, y_axis, z_axis, size_axis, balance_axis
 
 def normalize_for_k_means(x_axis, y_axis, z_axis):
+    """Normalizes points for the k-means
+
+    Args:
+        x_axis (list): list of x-axis points
+        y_axis (list): list of y-axis points
+        z_axis (list): list of z-axis points
+
+    Returns:
+        list, list, list: list of normalized points
+    """
     x_norm = max(x_axis) - min(x_axis)
     y_norm = max(y_axis) - min(y_axis)
     z_norm = max(z_axis) - min(z_axis)
@@ -869,6 +1050,18 @@ def normalize_for_k_means(x_axis, y_axis, z_axis):
     return x_norm, y_norm, z_norm
 
 def k_means(data_points, norm, k, dim, stop=5):
+    """k-means algorithms
+
+    Args:
+        data_points (tuple): tuple containing the data of the points
+        norm (tuple): tuple containing the norm
+        k (int): number of groups for the algorithm
+        dim (int): dimension of the groups
+        stop (int, optional): number of steps for the algorithm. Defaults to 5.
+
+    Returns:
+        dict: dictionary containing communities
+    """
     limits = calc_limits(data_points, dim)
     centroids = create_centroids(limits, k)
     points = get_points(data_points, dim)
@@ -879,6 +1072,19 @@ def k_means(data_points, norm, k, dim, stop=5):
 
 
 def k_means_help(points, centroids, communities, dim, stop, norm):
+    """Helper function for the k-means algorithm
+
+    Args:
+        points (list): list containing the points
+        centroids (list): list containing centroids
+        communities (dict): Dictionary containing communities
+        dim (int): Dimension of the groups
+        stop (int): Number of steps for the algorithm to execute
+        norm (tuple): tuple containing the norm
+
+    Returns:
+        dict: Dictionary containing communities
+    """
     cycles = 0
     centroids = adjust_centroids(centroids, communities, dim)
     new_communities = calc_communities(points, centroids, norm)
@@ -893,6 +1099,15 @@ def k_means_help(points, centroids, communities, dim, stop, norm):
 
 
 def same_communities(community1, community2):
+    """Returns True if the two communities are the same
+
+    Args:
+        community1 (dict): Dictionary of communities to compare
+        community2 (dict): Dictionary of communities to compare
+
+    Returns:
+        Boolean: True if the two communities are the same. False otherwise.
+    """
     for community in community1.values():
         if community not in community2.values():
             return False
@@ -900,6 +1115,16 @@ def same_communities(community1, community2):
 
 
 def adjust_centroids(centroids, communities, dim):
+    """Adjusts the centroids of the communities
+
+    Args:
+        centroids (list): list of centroids
+        communities (dict): dictionary containing communities
+        dim (int): dimension of the graph
+
+    Returns:
+        list: list of new centroids
+    """
     new_centroids = list()
     for centroid in centroids:
         centroid = adjust_centroid(communities[centroid], dim)
@@ -908,6 +1133,15 @@ def adjust_centroids(centroids, communities, dim):
 
 
 def adjust_centroid(points, dim):
+    """Adjusts the centroid of the points
+
+    Args:
+        points (list): List of points
+        dim (int): Dimension of the plot
+
+    Returns:
+        Centroid: New Centroid of the points
+    """
     new_dim = dict()
     for d in range(dim):
         new_dim[d] = list()
@@ -924,6 +1158,16 @@ def adjust_centroid(points, dim):
 
 
 def calc_communities(points, centroids, norm):
+    """Calculates the new communities
+
+    Args:
+        points (list): List of points
+        centroids (list): List of centroids
+        norm (int): Norm
+
+    Returns:
+        dict: Dictionary of comunities
+    """
     communities = dict()
     for centroid in centroids:
         communities[centroid] = list()
@@ -934,6 +1178,16 @@ def calc_communities(points, centroids, norm):
 
 
 def find_closest(point, centroids, norm):
+    """Find the closests centroid of the points
+
+    Args:
+        point (list): list of points
+        centroids (list): List of centroids
+        norm (norm): Norm
+
+    Returns:
+        Centroid: Closest Centroid of the points
+    """
     closest_centroid = centroids[0]
     closest_dist = calc_dist(point, centroids[0].place, norm)
     for centroid in centroids:
@@ -945,6 +1199,16 @@ def find_closest(point, centroids, norm):
 
 
 def calc_dist(point, centroid, norm):
+    """Calculates distance from point to centroid
+
+    Args:
+        point (tuple): point
+        centroid (tuple): point of centroid
+        norm (norm): norm
+
+    Returns:
+        int: Eucledian distance from the point to the centroid
+    """
     dist = 0
     for index in range(len(point)):
         dist += ((point[index] - centroid[index]) / norm[index]) ** 2
@@ -953,6 +1217,15 @@ def calc_dist(point, centroid, norm):
 
 
 def get_points(data_points, dim):
+    """Gets the points from the data points
+
+    Args:
+        data_points (tuple): Tuple of data points
+        dim (int): dimension of the plot
+
+    Returns:
+        list: list of points
+    """
     points = list()
     for index in range(len(data_points[0])):
         point = list()
@@ -963,6 +1236,15 @@ def get_points(data_points, dim):
 
 
 def calc_limits(data_points, dim):
+    """Calculates limits of the data points
+
+    Args:
+        data_points (tuple): Tuple of the data points
+        dim (int): Dimension of the plot
+
+    Returns:
+        list: List of the limits
+    """
     limits = list()
     for d in range(dim):
         high = max(data_points[d])
@@ -972,6 +1254,15 @@ def calc_limits(data_points, dim):
 
 
 def create_centroids(limits, k):
+    """Creates centroids from the limits
+
+    Args:
+        limits (list): List of limits
+        k (int): Number of groups for the algorithm
+
+    Returns:
+        list: List of centroids
+    """
     centroids = list()
     for i in range(k):
         c = list()
@@ -981,9 +1272,18 @@ def create_centroids(limits, k):
         centroids.append(centroid)
     return centroids
 
-def calculate_team_salary_metrics(players_dictionary: pd.DataFrame, team_list):
+def calculate_team_salary_metrics(players_dictionary: pd.DataFrame, team_list: list) -> dict:
+    """Calculates the team salary metrics from a DataFrame
+
+    Args:
+        players_dictionary (pd.DataFrame): DataFrame containing the players data
+        team_list (list): List of teams
+
+    Returns:
+        dict: Dictionary containing team salary metrics
+    """
     salary_metrics = dict()
-    # for player in players_dictionary.values():
+    
     for x in players_dictionary.index:
         team = players_dictionary.loc[x, "Club"]
         if team not in salary_metrics:
@@ -1004,9 +1304,18 @@ def calculate_team_salary_metrics(players_dictionary: pd.DataFrame, team_list):
         element[2][GINI] = gini(element[0])
     return salary_metrics
 
-def calculate_team_salary_metrics_yearly(players_dictionary: pd.DataFrame, team_list):
+def calculate_team_salary_metrics_yearly(players_dictionary: pd.DataFrame, team_list: list) -> dict:
+    """Calculates the team salary metrics per year
+
+    Args:
+        players_dictionary (pd.DataFrame): DataFrame containing players data
+        team_list (list): List of teams
+
+    Returns:
+        dict: Dictionary containing team salary metrics per year
+    """
     salary_metrics = dict()
-    # for player in players_dictionary.values():
+    
     for x in players_dictionary.index:
         team = players_dictionary.loc[x, "Club"]
         year = players_dictionary.loc[x, "Year"]
@@ -1035,16 +1344,49 @@ def calculate_team_salary_metrics_yearly(players_dictionary: pd.DataFrame, team_
     return salary_metrics
 
 def arrange_decimal_point(num, d=3):
+    """Arranges decimal point from a number
+
+    Args:
+        num (int | float): Number to adjust
+        d (int, optional): Factor to adjust the decimal point. Defaults to 3.
+
+    Returns:
+        float: Number after decimal arrangement
+    """
     factor = 10 ** d
     return int(num * factor) / factor
 
 def calc_avg(lst):
+    """Calculates average from the list
+
+    Args:
+        lst (list): list of numbers
+
+    Returns:
+        float: Average of the numbers from the list
+    """
     return sum(lst) / len(lst)
 
 def calc_median(lst):
+    """Calculates median from list
+
+    Args:
+        lst (list): list of numbers
+
+    Returns:
+        float: median of the list of numbers
+    """
     return lst[int(len(lst) / 2)]
 
 def gini(data_list):
+    """Calculates the gini criterion from the list
+
+    Args:
+        data_list (list): list of numbers
+
+    Returns:
+        float: gini criterion
+    """
     n = len(data_list)
     s = sum(data_list)
     total_dist = 0
@@ -1055,6 +1397,17 @@ def gini(data_list):
     return g
 
 def create_team_performance_dict(players_data, team_dataset: pd.DataFrame, team_list, parameter_list=DEFAULT_STATS):
+    """Creates dictionary of the team performance
+
+    Args:
+        players_data (pd.DataFrame): DataFrame containing players data
+        team_dataset (pd.DataFrame): DataFrame containing teams table data
+        team_list (list): List of teams
+        parameter_list (list, optional): list of parameters. Defaults to DEFAULT_STATS.
+
+    Returns:
+        dict: Dictionary of team performances
+    """
     teams_performances = dict()
     for year in range(2007, 2018):
         year_performance = dict()
@@ -1073,16 +1426,34 @@ def create_team_performance_dict(players_data, team_dataset: pd.DataFrame, team_
     return teams_performances
 
 def sum_team_parameter_per_year(players_dictionary: pd.DataFrame, parameter, year, team):
-    # for key in players_dictionary.keys():
-    #     if key[YEAR_INDEX] == year and key[TEAM_INDEX] == team:
-    #         if type(players_dictionary[key][parameter]) != str:
-    #             parameter_sum += players_dictionary[key][parameter]
+    """Sums parameter of a team per year
+
+    Args:
+        players_dictionary (pd.DataFrame): Dictionary containing players stats
+        parameter (str): Parameter to add
+        year (int): Year to evaluate
+        team (str): Team abreviation
+
+    Returns:
+        int: Sum of the parameter
+    """
     param_sum = players_dictionary[(players_dictionary.Year == year) & (
         players_dictionary.Club == team)][parameter].sum()
 
     return param_sum
 
 def into_groups(x_axis, y_axis, group_factor, group_index=0):
+    """Creates groups from the data
+
+    Args:
+        x_axis (list): List of points from x-axis
+        y_axis (list): List of points from y-axis
+        group_factor (float): Value for the group factor
+        group_index (int, optional): Value for the group index. Defaults to 0.
+
+    Returns:
+        list,list: list of groups for every axis
+    """
     x_group_axis = list()
     y_group_axis = list()
     to_sort_list = list()
@@ -1108,6 +1479,15 @@ def into_groups(x_axis, y_axis, group_factor, group_index=0):
     return x_group_axis, y_group_axis
 
 def sort_to_plot(base_x_axis, base_y_axis):
+    """Sorts points to plot them
+
+    Args:
+        base_x_axis (list): list of x axis
+        base_y_axis (list): list of y axis
+
+    Returns:
+        list, list: list of sorted points for each axis
+    """
     x_axis = list()
     y_axis = list()
     to_sort_list = list()
@@ -1120,9 +1500,13 @@ def sort_to_plot(base_x_axis, base_y_axis):
     return x_axis, y_axis
 
 def train_evaluation(team_list, team_performance, yearly_salary):
-    # team_list = resources[4]
-    # team_performance = resources[7]
-    # yearly_salary = resources[8]
+    """Creates plot from data to evaluate predictions according to the number of wins and balance-score from the data we have
+
+    Args:
+        team_list (list): List of teams
+        team_performance (dict): Dictionary of team performances
+        yearly_salary (dict): Dictionary of yearly salaries per team
+    """
     column = range(0, 40, 4)
     golden_ratio = [[3.2, 6.0]]
     bad_zone = 1.9  # 6?
@@ -1215,8 +1599,14 @@ def train_evaluation(team_list, team_performance, yearly_salary):
     print(st.pearsonr(bottom_x_list, bottom_y_list))
     
 def evaluation(salary_metric, team_list):
-    # salary_metric = resources[6]
-    # team_list = resources[4]
+    """Evaluates our predictions from new data
+        We need to adjust the lower, upper bound and evaluation win data for each year
+
+    Args:
+        salary_metric (dict): Dictionary containing teams salary metrics
+        team_list (list): List of teams 
+    """
+    
     column = range(0, 33, 3)
     top_flag = False
     bottom_flag = False
@@ -1278,11 +1668,28 @@ def evaluation(salary_metric, team_list):
 
 
 def get_top_bottom(wins_list):
+    """Gets the top and bottom from the list of wins
+
+    Args:
+        wins_list (list): List of wins of teams
+
+    Returns:
+        int,int: top and bottom of the list
+    """
     sorted_list = sorted(wins_list, key=lambda elem: elem)
     return sorted_list[-3], sorted_list[8]
 
 
 def get_search_score(x, golden_ratio):
+    """Gets if the number is inside the golen ratio
+
+    Args:
+        x (float): Number to evaluate
+        golden_ratio (list): list containing parameters of golden ratio
+
+    Returns:
+        int: 1 if the number is between the golden ratio, 0 otherwise
+    """
     for interval in golden_ratio:
         if interval[0] < x < interval[1]:
             return 1
@@ -1290,6 +1697,11 @@ def get_search_score(x, golden_ratio):
 
 
 def get_players_data() -> pd.DataFrame:
+    """Gets the players data from the csv file. Removes unnecesary columns and normalize names.
+
+    Returns:
+        pd.DataFrame: DataFrame of the players data
+    """
     data = load_data(PLAYER_DATASET)
     data = preprocess_players(data)
     col = [x for x in list(data.columns)
@@ -1298,15 +1710,14 @@ def get_players_data() -> pd.DataFrame:
     return data
 
 def get_table_data() -> pd.DataFrame:
+    """Gets tha teams table data from the csv files. Process the data to obtain the desired data.
+
+    Returns:
+        pd.DataFrame: DataFrame of the teams data.
+    """
     data = load_data(TEAM_DATASET)
     data = preprocess_table(data)
     return data
-
-# Things to consider:
-# -Get statistics of the full team
-# -Add base_salary + compensation and get std deviation
-# -Check with team performance:
-#   - Goals? Wins? Assists? SOG?
 
 
 if __name__ == "__main__":
@@ -1324,63 +1735,30 @@ if __name__ == "__main__":
     players = get_players_data()
     # Players and Salary dataset
     dataset = pd.merge(salary, players, on=["Player", "Year", "Club"])
-    # plot_salary_distribution(dataset,"Wage")
-    # tm_pf_dict = plot_salary_param_distribution(dataset,["G","A","SOG","GWG","GWA","G/90min","A/90min"])
-    # print(tm_pf_dict)
-    # dataset["Wage"].plot.hist(by=["Year"])
-    # plt.show()
+    
+    ##Step one
+    plot_salary_distribution(dataset,"Wage")    #Wage = base_salary + guaranteed_compensation
 
-    param_list = ["G", "A", "SOG", "GWG", "GWA", "G/90min", "A/90min"]
+    ##Step two and three
+    tm_pf_dict = plot_salary_param_distribution(dataset,DEFAULT_STATS)
+    
+
+    
     team_performances = players[["Club", "Year", "G", "A", "SOG", "GWG",
                                  "GWA", "G/90min", "A/90min"]].groupby(["Club", "Year"]).sum()
     team_performances = pd.merge(team_performances, table, on=["Club", "Year"])
-
-    # tm_pf_dict1 = wins_by_parameter(team_performances,param_list)
-    # print(tm_pf_dict1)
-    data = salary[["Club", "base_salary", "Year"]
-                  ].groupby(["Club", "Year"]).sum()
-    data2 = pd.merge(data, table, on=["Club", "Year"])
+    tm_pf_dict1 = wins_by_parameter(team_performances,DEFAULT_STATS)
+    tm_pf_dict2 = wins_by_parameter(team_performances,DEFAULT_STATS,"Num_Championships")
+    
+    # EVALUATION
     team_list = dataset["Club"].unique().tolist()
 
-    team_performance_dict = create_team_performance_dict(
-        players, table, team_list)
-    salary_metrics_dict = calculate_team_salary_metrics_yearly(
-        dataset, team_list)
+    team_performance_dict = create_team_performance_dict(players, table, team_list)
+    salary_metrics_dict = calculate_team_salary_metrics_yearly(dataset, team_list)
     
     salary_metrics_1 = calculate_team_salary_metrics(dataset,team_list)
-
-    
-
-    # EVALUATION
-    # search_k_means_communities(team_list,team_performance_dict,salary_metrics_dict,"W")
+    search_k_means_communities(team_list,team_performance_dict,salary_metrics_dict,"W")
     train_evaluation(team_list, team_performance_dict,salary_metrics_dict) 
-    # evaluation(salary_metrics_1,team_list)
-    
-    
-    # print(team_performances.head())
-    # print(team_performances.columns)
-    # champions = team_performances[team_performances["Champion"] == True]
-    # print(champions["Club"].value_counts())
-
-    # tm_pf_dict2 = wins_by_parameter(team_performances,param_list,"Num_Championships")
-    # pearson_distance(tm_pf_dict,tm_pf_dict2)
-
-    # print(team_performances.columns)
-    # data3 = team_performances.groupby(["Club","Champion"]).size().unstack(fill_value=0).reset_index()
-    # # data3.fillna(0,inplace=True)
-    # data3['number_torunaments'] = data3[False] + data3[True]
-    # data3.rename(columns={True:'Num_Championships',False:'No_championship'},inplace=True)
-
-    # # data3['proportion_championships'] = data3[True] / data3[False]
-    # # data3.sort_values('proportion_championships',ascending=False,inplace=True)
-    # print(data3.head())
-    
-    champion_pattern = r'\(([CWEUV]1?(\, [XS]{1,2})?|[XS]{1,2}\, [CWE]1?)\)'
-    table_data = load_data(TEAM_DATASET)
-    table_data = preprocess_table(table_data,2020)
-    
-    win_dict = dict()
-    for x in table_data[["Club","W"]].index:
-        win_dict[table_data.loc[x,"Club"]] = table_data.loc[x,"W"]
-    # print(win_dict)    
+    evaluation(salary_metrics_1,team_list)
+      
     
